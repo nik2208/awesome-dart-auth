@@ -1,0 +1,17 @@
+name: awesome_dart_auth_shelf
+publish_to: none
+description: Shelf adapter for awesome-dart-auth.
+version: 0.1.0
+repository: https://github.com/nik2208/awesome-dart-auth
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  awesome_dart_auth:
+    path: ../awesome_dart_auth
+  shelf: ^1.4.2
+
+dev_dependencies:
+  test: ^1.25.6
+  very_good_analysis: ^9.0.0
