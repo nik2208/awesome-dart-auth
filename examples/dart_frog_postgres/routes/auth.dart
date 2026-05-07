@@ -34,5 +34,5 @@ final _router = AuthRouter(
   ),
 );
 
-Future<Response> onRequest(RequestContext context) =>
-    awesomeDartAuthHandler(_router)(context);
+Future<Response> onRequest(RequestContext context) async =>
+    await awesomeDartAuthHandler(_router)(context);
