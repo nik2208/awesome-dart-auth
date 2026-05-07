@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:awesome_dart_auth/src/config/auth_callbacks.dart';
 import 'package:awesome_dart_auth/src/config/auth_config.dart';
@@ -779,7 +780,7 @@ class AuthRouter {
           .toList(growable: false);
 
   String _sixDigitOtp() {
-    final n = DateTime.now().millisecondsSinceEpoch % 1000000;
+    final n = Random.secure().nextInt(1000000);
     return n.toString().padLeft(6, '0');
   }
 }

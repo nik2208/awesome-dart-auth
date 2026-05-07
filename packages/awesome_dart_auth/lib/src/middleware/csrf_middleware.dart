@@ -109,7 +109,7 @@ Middleware csrfMiddleware({
           !isExempt(request.requestedUri.path)) {
         final sentToken = request.headers[_csrfHeaderName];
         if (sentToken == null || sentToken != token) {
-          return Response(403, body: 'invalid csrf token');
+          return Response(403, body: 'Invalid CSRF token');
         }
       }
 

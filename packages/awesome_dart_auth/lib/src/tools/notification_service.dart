@@ -154,13 +154,13 @@ class NotificationService {
     // In a real implementation this would use `package:http` or a similar
     // HTTP client.  The abstraction intentionally keeps the core package
     // free of mandatory HTTP-client dependencies by delegating to the
-    // NotificationService.send* callbacks in AuthConfig.
+    // `onSmsSend` / `onForgotPassword` callbacks in AuthCallbacks.
     //
     // Integrators that need live delivery should override this method or
-    // supply `onSmsSend` / `onForgotPassword` callbacks in AuthConfig.
+    // supply `onSmsSend` / `onForgotPassword` callbacks in AuthCallbacks.
     throw UnimplementedError(
       'NotificationService._postJson is not implemented. '
-      'Provide onSmsSend / onForgotPassword callbacks in AuthConfig, '
+      'Provide onSmsSend / onForgotPassword callbacks in AuthCallbacks, '
       'or use a custom NotificationService subclass that calls your HTTP '
       'client of choice.',
     );

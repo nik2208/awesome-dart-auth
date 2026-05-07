@@ -155,7 +155,7 @@ void main() {
       expect(response.statusCode, 400);
     });
 
-    test('logins and returns tokens via POST /auth/login', () async {
+    test('logs in and returns tokens via POST /auth/login', () async {
       await router.handler(
         Request(
           'POST',

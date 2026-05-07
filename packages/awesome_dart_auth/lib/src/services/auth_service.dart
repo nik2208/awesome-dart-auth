@@ -90,6 +90,7 @@ class AuthService {
       secret,
       now,
       algorithm: Algorithm.SHA1,
+      isGoogle: true,
     );
   }
 
