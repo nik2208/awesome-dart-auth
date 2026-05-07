@@ -1,85 +1,405 @@
 # awesome-dart-auth
 
-Idiomatic Dart authentication for **server-side** backends built with Shelf and Dart Frog.
+[![Dart](https://img.shields.io/badge/dart-3.11+-blue.svg)](https://dart.dev)
+[![Shelf](https://img.shields.io/badge/Shelf-1.4+-green.svg)](https://pub.dev/packages/shelf)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-> **Important:** `awesome-dart-auth` is a server-side package. Flutter client support continues through the existing `awesome-node-auth-flutter` client package.
+**Server-side authentication library for Dart backends** (Shelf / Dart Frog) that replicates the [awesome-node-auth](https://github.com/nik2208/awesome-node-auth) Node.js backend in Dart.
+
+> **Important:** `awesome-dart-auth` is a server-side package.  
+> Flutter client support continues through the existing [`awesome-node-auth-flutter`](https://github.com/nik2208/awesome-node-auth-flutter) client package.
+
+Fully compatible with:
+- **[ng-awesome-node-auth](https://github.com/nik2208/ng-awesome-node-auth)** — Angular client library
+- **[awesome-node-auth-flutter](https://github.com/nik2208/awesome-node-auth-flutter)** — Flutter/Dart client library
+
+Supports **both authentication strategies** used by those clients:
+
+| Platform | Strategy | Token |
+|---|---|---|
+| Angular / Web | Cookie (HttpOnly) + CSRF | `access-token` cookie + `X-CSRF-Token` header |
+| Flutter Native (iOS/Android/Desktop) | Bearer token | `Authorization: Bearer <token>` + `X-Auth-Strategy: bearer` |
+
+---
+
+## Parity Snapshot vs `awesome-node-auth`
+
+| Capability | Status in `awesome-dart-auth` | Notes |
+|---|---|---|
+| Auth strategies (email/password, magic link, SMS OTP, TOTP 2FA, OAuth linking) | ✅ Implemented | Dedicated endpoints for each strategy; OAuth uses `onOAuthStart` / `onOAuthCallback` hooks. |
+| Token management (cookie/bearer, access/refresh rotation, secure cookies) | ✅ Implemented | Cookie + bearer mode, rotation, and optional `cookiePrefix` (`__Host-` / `__Secure-`) via `AuthConfig`. |
+| Identity Provider (IdP) mode (RS256 + JWKS + resource server validation) | ✅ Implemented | OIDC discovery + JWKS endpoint exposed; `enableIdpMode` flag controls availability. |
+| Stateful sessions | ✅ Implemented | Session lifecycle with revocation checks configurable via `AuthConfig.sessionCheckOn` (`allCalls` / `refresh` / `none`). |
+| Dynamic email templates + UI i18n fallback | ✅ Implemented | `TemplateStore` contract + `TemplateRenderer` with built-in `en` and `it` locales and Mustache rendering. |
+| CSRF protection | ✅ Implemented | `csrfMiddleware()` uses cookie + header double-submit validation for browser flows; bearer requests skip validation. |
+| Account management | ✅ Implemented | Register, login, logout, me, profile update, password / email change, verification, and account deletion. |
+| Account linking | ✅ Implemented | Link request/verify plus linked-account listing and unlinking via `AuthCallbacks`. |
+| RBAC | ✅ Implemented | `RolesPermissionsStore` with role-enriched JWT claims. |
+| Multi-tenancy | ✅ Implemented | `TenantStore` contract and `tenantId` propagation through models and tokens. |
+| Admin panel | ✅ Implemented | Embedded admin SPA shell served by `AuthRouter` at `/auth/admin`. |
+| Built-in UI + auth runtime (`auth.js`) | ✅ Implemented | Embedded auth UI and browser SDK served at `/auth/ui` and `/auth/ui/auth.js`. |
+| Client libraries compatibility (Angular + Flutter) | ✅ Implemented | Cookie+CSRF (web) and bearer (native) strategies are both supported. |
+| Event-driven tooling (event bus, SSE, inbound/outbound webhooks, telemetry, notify channels) | ✅ Implemented | `AuthTools`, `AuthEventBus`, `SseDistributor`, webhook signing, telemetry, and multi-channel `notify()`. |
+| API keys (M2M) | ✅ Implemented | `ApiKeyStore` contract and `ApiKeyRecord` model available. |
+| OpenAPI / Swagger docs | ✅ Implemented | `buildOpenApiDocument()` generates a full OpenAPI 3.1 spec for all auth routes. |
+| MCP server (`awesome-node-auth-mcp-server`) | ➖ Out of scope | No Dart-side MCP server is bundled; `enableMcpCompatibility` reserves the flag. |
+
+---
 
 ## Monorepo layout
 
-- `packages/awesome_dart_auth` — framework-agnostic core
-- `packages/awesome_dart_auth_shelf` — Shelf adapter
-- `packages/awesome_dart_auth_dart_frog` — Dart Frog adapter
-- `examples/shelf_mongodb` — Shelf integration example
-- `examples/dart_frog_postgres` — Dart Frog integration example
+```
+packages/
+  awesome_dart_auth/         — framework-agnostic core
+  awesome_dart_auth_shelf/   — Shelf adapter
+  awesome_dart_auth_dart_frog/ — Dart Frog adapter
+examples/
+  shelf_mongodb/             — Shelf integration example
+  dart_frog_postgres/        — Dart Frog integration example
+```
 
-## Feature coverage
-
-The core package currently ships the primitives required to model the awesome-node-auth architecture:
-
-- `AuthConfig` with validation, named constructors, and `copyWith`
-- database-agnostic store contracts with dartdoc comments
-- JWT access/refresh token issuing via `dart_jsonwebtoken`
-- password hashing via `bcrypt`
-- TOTP generation via `otp`
-- HMAC webhook signing via `crypto`
-- embedded Admin UI, Auth UI, and `auth.js`
-- Mustache mail templating with built-in `en` and `it` locales
-- event bus and telemetry hooks
-- inbound webhook action registry sandboxed with `Isolate.run`
-- OIDC discovery + JWKS + token/userinfo route scaffolding
-- auto-generated OpenAPI document for the built-in routes
-
-## Compatibility note
-
-This repository mirrors the **route shape and token conventions** expected by the existing Angular and Flutter clients where implemented.
-
-### Explicit deviations
-
-The initial Dart implementation in this repository provides the shared configuration, service, routing, UI, templating, and adapter infrastructure, but does **not** yet provide a production-complete implementation of every awesome-node-auth endpoint (for example full OAuth provider flows, SMS delivery, refresh-token revocation persistence, or a complete admin SPA).
-
-Those remaining pieces are intentionally exposed behind abstract stores and integration points so they can be completed without changing the public package layout introduced here.
+---
 
 ## Getting started
 
 ```bash
-/tmp/dart-sdk/bin/dart pub get
-/tmp/dart-sdk/bin/dart run melos bootstrap
-/tmp/dart-sdk/bin/dart run melos analyze
-/tmp/dart-sdk/bin/dart run melos test
+dart pub get
+dart run melos bootstrap
+dart run melos analyze
+dart run melos test
 ```
 
-## Package highlights
+---
 
-### Core router
+## Quick start
 
 ```dart
-final config = AuthConfig.development(jwtSecret: 'change-me');
-final service = AuthService(
-  config: config,
-  userStore: myUserStore,
-  sessionStore: mySessionStore,
-);
-final router = AuthRouter(config: config, authService: service);
+import 'package:awesome_dart_auth/awesome_dart_auth.dart';
+import 'package:shelf/shelf.dart';
+import 'package:shelf/shelf_io.dart' as shelf_io;
+
+Future<void> main() async {
+  final config = AuthConfig.development(jwtSecret: 'your-secret-here');
+
+  final router = AuthRouter(
+    config: config,
+    authService: AuthService(
+      config: config,
+      userStore: myUserStore,
+      sessionStore: mySessionStore,
+    ),
+    // Optional: supply side-effect callbacks to enable full auth flows
+    callbacks: AuthCallbacks(
+      onForgotPassword: (user, token) async {
+        await mailer.send(user.email, 'Reset your password', token);
+      },
+      onMagicLinkSend: (user, token) async {
+        await mailer.send(user.email, 'Your magic link', token);
+      },
+      onMagicLinkVerify: (token, mode) async {
+        return await tokenStore.verify(token); // returns userId or null
+      },
+    ),
+  );
+
+  // Add CSRF middleware for Angular web clients
+  final handler = const Pipeline()
+      .addMiddleware(csrfMiddleware(apiBasePath: '/auth'))
+      .addHandler(router.handler);
+
+  final server = await shelf_io.serve(handler, 'localhost', 8080);
+  print('Listening on http://localhost:${server.port}');
+}
 ```
 
-Built-in endpoints include:
+---
 
-- `GET /auth/admin`
-- `GET /auth/ui`
-- `GET /auth/ui/auth.js`
-- `GET /auth/openapi.json`
-- `GET /auth/.well-known/openid-configuration`
-- `GET /auth/jwks`
-- `GET /auth/userinfo`
-- `POST /auth/token`
+## AuthConfig
 
-### Templates
+```dart
+final config = AuthConfig(
+  jwtSecret: 'your-secret',          // JWT signing secret
+  issuer: 'https://auth.example.com',
+  accessTokenTtl: Duration(minutes: 15),
+  refreshTokenTtl: Duration(days: 30),
+  sessionCheckOn: SessionCheckOn.refresh, // allCalls | refresh | none
+  cookieSecure: true,                // Set false for local HTTP
+  cookieSameSite: 'lax',
+  cookiePrefix: '__Host-',           // Optional: __Host- or __Secure-
+  uiConfig: {'theme': 'dark'},       // Returned by GET /auth/ui/config
+  enableIdpMode: true,               // Expose OIDC discovery + JWKS
+  oauthProviders: {'google', 'github'},
+);
+```
 
-Built-in mail templates live under:
+---
 
-- `packages/awesome_dart_auth/lib/templates/en/`
-- `packages/awesome_dart_auth/lib/templates/it/`
+## Custom stores
 
-### Examples
+Implement the store contracts to connect to your database:
 
-See the example projects for end-to-end wiring with Shelf and Dart Frog adapters.
+```dart
+class PostgresUserStore implements UserStore {
+  @override
+  Future<AuthUser?> findByEmail(String email) async { /* … */ }
+
+  @override
+  Future<AuthUser?> findById(String id) async { /* … */ }
+
+  @override
+  Future<AuthUser> save(AuthUser user) async { /* … */ }
+
+  @override
+  Future<AuthUser> update(AuthUser user) async { /* … */ }
+
+  @override
+  Future<void> delete(String id) async { /* … */ }
+}
+```
+
+---
+
+## API Endpoints
+
+All endpoints are mounted under `apiBasePath` (default: `/auth`).
+
+### Session
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/register` | Create a new account |
+| `POST` | `/login` | Login with email + password |
+| `POST` | `/logout` | Logout and revoke the current session |
+| `GET` | `/me` | Return the current authenticated user |
+| `POST` | `/refresh` | Refresh the access token |
+| `PATCH` | `/profile` | Update first / last name |
+| `DELETE` | `/account` | Delete the current account |
+
+### Password
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/forgot-password` | Initiate password recovery |
+| `POST` | `/reset-password` | Reset password with token |
+| `POST` | `/change-password` | Change password (authenticated) |
+| `POST` | `/send-verification-email` | Resend email verification |
+| `GET` | `/verify-email` | Verify email address |
+| `POST` | `/change-email/request` | Request email address change |
+| `POST` | `/change-email/confirm` | Confirm email address change |
+
+### Two-Factor Authentication (TOTP)
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/2fa/setup` | Begin TOTP setup (returns QR code + secret) |
+| `POST` | `/2fa/verify-setup` | Confirm TOTP setup |
+| `POST` | `/2fa/verify` | Verify TOTP code during login |
+| `POST` | `/2fa/disable` | Disable TOTP |
+
+### Magic Link
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/magic-link/send` | Send a magic-link email |
+| `POST` | `/magic-link/verify` | Verify magic-link token |
+
+### SMS / OTP
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/sms/send` | Send an SMS OTP |
+| `POST` | `/sms/verify` | Verify SMS OTP |
+| `POST` | `/add-phone` | Add phone number to account |
+
+### Sessions (device management)
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/sessions` | List all active sessions |
+| `DELETE` | `/sessions/{handle}` | Revoke a session |
+
+### OAuth
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/oauth/{provider}` | Start provider OAuth flow (redirect via `onOAuthStart`) |
+| `GET` | `/oauth/{provider}/callback` | Complete provider callback and create session |
+
+### Account Linking
+| Method | Path | Description |
+|---|---|---|
+| `POST` | `/link-request` | Initiate account linking |
+| `POST` | `/link-verify` | Verify linking token |
+| `GET` | `/linked-accounts` | List linked OAuth providers |
+| `DELETE` | `/linked-accounts/{provider}/{id}` | Unlink a provider |
+
+### Utilities / UI
+| Method | Path | Description |
+|---|---|---|
+| `GET` | `/ui/config` | UI configuration (theme, branding) |
+| `GET` | `/ui` | Embedded auth UI |
+| `GET` | `/ui/auth.js` | Embedded browser SDK |
+| `GET` | `/admin` | Embedded admin UI |
+| `GET` | `/openapi.json` | OpenAPI 3.1 specification |
+
+---
+
+## Hooks / Callbacks
+
+Plug in side-effects without subclassing by supplying `AuthCallbacks`:
+
+```dart
+final router = AuthRouter(
+  config: config,
+  authService: service,
+  callbacks: AuthCallbacks(
+    onRegister: (user) async {
+      await sendWelcomeEmail(user.email);
+      return user;
+    },
+    onForgotPassword: (user, token) async {
+      final link = 'https://myapp.com/reset-password?token=$token';
+      await mailer.send(user.email, 'Reset your password', link);
+    },
+    onMagicLinkSend: (user, token) async {
+      await mailer.send(user.email, 'Your magic link', token);
+    },
+    onMagicLinkVerify: (token, mode) async {
+      return await magicLinkStore.verify(token); // userId or null
+    },
+    onSmsSend: (user, otp) async {
+      await smsClient.send(user.phoneNumber!, 'Your OTP: $otp');
+    },
+    onSmsVerify: (user, code) async {
+      return await otpStore.verify(user.id, code);
+    },
+    onOAuthStart: (provider, redirectUri) async {
+      return oauthClient.authorizationUrl(provider, redirectUri);
+    },
+    onOAuthCallback: (provider, code, redirectUri) async {
+      return await oauthClient.handleCallback(provider, code, redirectUri);
+    },
+  ),
+);
+```
+
+---
+
+## CSRF Middleware
+
+Required when Angular web clients are used:
+
+```dart
+final handler = const Pipeline()
+    .addMiddleware(
+      csrfMiddleware(
+        apiBasePath: '/auth',
+        cookieSecure: true,      // false for local HTTP development
+        cookieSameSite: 'lax',
+      ),
+    )
+    .addHandler(router.handler);
+```
+
+The middleware:
+1. Sets a `csrf-token` cookie (readable by JavaScript) on every response.
+2. Validates the `X-CSRF-Token` request header for mutating requests.
+3. Automatically skips validation for login/register endpoints and bearer-token requests.
+
+---
+
+## AuthTools — multi-channel `notify()`
+
+```dart
+final tools = AuthTools(
+  sse: mySseDistributor,
+  notificationService: NotificationService(
+    email: MailerConfig(
+      endpoint: 'https://mailer.example.com/send',
+      apiKey: 'mailer-key',
+      fromAddress: 'no-reply@example.com',
+    ),
+    sms: SmsConfig(
+      endpoint: 'https://sms.example.com/send',
+      apiKey: 'sms-key',
+    ),
+  ),
+  userStore: myUserStore,
+  eventBus: myBus,
+);
+
+// SSE only (default)
+await tools.notify('user:123', type: 'ping', data: {'msg': 'Hello!'});
+
+// Email + SSE
+await tools.notify(
+  'user:123',
+  type: 'subscription_expiring',
+  data: {'days': 3},
+  userId: '123',
+  channels: [NotifyChannel.sse, NotifyChannel.email],
+  emailSubject: 'Your subscription expires soon',
+);
+
+// Track a domain event
+await tools.track('identity.auth.login.success', userId: 'user-123');
+```
+
+---
+
+## AuthEventBus
+
+```dart
+final bus = InMemoryAuthEventBus();
+
+// Subscribe
+bus.subscribe().listen((event) {
+  print('Event: ${event.type} for user ${event.userId}');
+});
+
+// Publish
+await bus.publish(AuthEvent(
+  type: 'identity.auth.login.success',
+  occurredAt: DateTime.now().toUtc(),
+  userId: 'user-123',
+));
+```
+
+Standard event types emitted by `AuthService`:
+- `identity.user.created`
+- `identity.auth.login.success`
+- `identity.auth.login.failed`
+- `identity.session.created`
+- `identity.session.revoked`
+
+---
+
+## Angular Integration
+
+```typescript
+// app.config.ts
+import { provideAuth } from 'ng-awesome-node-auth';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideAuth({ apiPrefix: '/auth' }),
+  ]
+};
+```
+
+---
+
+## Flutter Integration
+
+```dart
+final auth = AuthClient(AuthOptions(
+  apiPrefix: 'http://your-server/auth',
+));
+await auth.checkSession();
+final result = await auth.login(LoginRequest(
+  email: 'alice@example.com',
+  password: 'secret123',
+));
+```
+
+---
+
+## Examples
+
+See the example projects for end-to-end wiring:
+
+- `examples/shelf_mongodb` — Shelf + MongoDB
+- `examples/dart_frog_postgres` — Dart Frog + PostgreSQL

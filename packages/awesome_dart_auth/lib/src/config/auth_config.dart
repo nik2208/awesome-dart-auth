@@ -1,5 +1,17 @@
 import 'package:meta/meta.dart';
 
+/// Controls when session revocation is checked for stateful sessions.
+enum SessionCheckOn {
+  /// Check on every authenticated API call.
+  allCalls,
+
+  /// Check only when a refresh token is exchanged.
+  refresh,
+
+  /// Never check (stateless mode).
+  none,
+}
+
 /// Immutable configuration for the awesome-dart-auth server runtime.
 @immutable
 class AuthConfig {
@@ -31,6 +43,11 @@ class AuthConfig {
     this.allowCookieTokens = true,
     this.allowBearerTokens = true,
     this.oauthProviders = const {'google', 'github', 'generic'},
+    this.sessionCheckOn = SessionCheckOn.refresh,
+    this.cookieSecure = true,
+    this.cookieSameSite = 'lax',
+    this.cookiePrefix,
+    this.uiConfig = const <String, Object?>{},
   }) {
     _validate();
   }
@@ -39,7 +56,11 @@ class AuthConfig {
   AuthConfig.development({
     required String jwtSecret,
     String issuer = 'http://localhost:8080',
-  }) : this(jwtSecret: jwtSecret, issuer: issuer);
+  }) : this(
+         jwtSecret: jwtSecret,
+         issuer: issuer,
+         cookieSecure: false,
+       );
 
   /// Creates a test-friendly configuration with short token lifetimes.
   AuthConfig.testing({
@@ -50,6 +71,7 @@ class AuthConfig {
          issuer: issuer,
          accessTokenTtl: const Duration(minutes: 5),
          refreshTokenTtl: const Duration(hours: 1),
+         cookieSecure: false,
        );
 
   /// Creates a production-oriented configuration.
@@ -141,6 +163,21 @@ class AuthConfig {
   /// Registered OAuth providers.
   final Set<String> oauthProviders;
 
+  /// Controls when stateful session revocation is checked.
+  final SessionCheckOn sessionCheckOn;
+
+  /// Whether to set the `Secure` flag on auth cookies.
+  final bool cookieSecure;
+
+  /// SameSite attribute for auth cookies (`lax`, `strict`, or `none`).
+  final String cookieSameSite;
+
+  /// Optional cookie name prefix (`__Host-` or `__Secure-`).
+  final String? cookiePrefix;
+
+  /// Static configuration map surfaced by the `GET /auth/ui/config` endpoint.
+  final Map<String, Object?> uiConfig;
+
   /// Returns a copy of this configuration with updated fields.
   AuthConfig copyWith({
     String? jwtSecret,
@@ -169,6 +206,11 @@ class AuthConfig {
     bool? allowCookieTokens,
     bool? allowBearerTokens,
     Set<String>? oauthProviders,
+    SessionCheckOn? sessionCheckOn,
+    bool? cookieSecure,
+    String? cookieSameSite,
+    Object? cookiePrefix = _sentinel,
+    Map<String, Object?>? uiConfig,
   }) {
     return AuthConfig(
       jwtSecret: jwtSecret ?? this.jwtSecret,
@@ -198,6 +240,13 @@ class AuthConfig {
       allowCookieTokens: allowCookieTokens ?? this.allowCookieTokens,
       allowBearerTokens: allowBearerTokens ?? this.allowBearerTokens,
       oauthProviders: oauthProviders ?? this.oauthProviders,
+      sessionCheckOn: sessionCheckOn ?? this.sessionCheckOn,
+      cookieSecure: cookieSecure ?? this.cookieSecure,
+      cookieSameSite: cookieSameSite ?? this.cookieSameSite,
+      cookiePrefix: identical(cookiePrefix, _sentinel)
+          ? this.cookiePrefix
+          : cookiePrefix as String?,
+      uiConfig: uiConfig ?? this.uiConfig,
     );
   }
 
@@ -224,7 +273,8 @@ class AuthConfig {
     }
     if (!allowBearerTokens && !allowCookieTokens) {
       throw ArgumentError(
-        'At least one transport between cookies and bearer tokens must be enabled.',
+        'At least one transport between cookies and bearer tokens must be '
+        'enabled.',
       );
     }
     if (!supportedLocales.contains(defaultLocale)) {
@@ -236,3 +286,5 @@ class AuthConfig {
     }
   }
 }
+
+const Object _sentinel = Object();

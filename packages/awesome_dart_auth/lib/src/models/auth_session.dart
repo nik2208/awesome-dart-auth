@@ -9,6 +9,10 @@ class AuthSession {
     required this.userId,
     required this.expiresAt,
     this.tenantId,
+    this.handle,
+    this.userAgent,
+    this.ipAddress,
+    this.createdAt,
     this.revoked = false,
     this.scopes = const <String>{},
   });
@@ -21,6 +25,18 @@ class AuthSession {
 
   /// Tenant scope, if any.
   final String? tenantId;
+
+  /// Human-readable device/session handle.
+  final String? handle;
+
+  /// User-agent string of the client that created this session.
+  final String? userAgent;
+
+  /// IP address of the client that created this session.
+  final String? ipAddress;
+
+  /// When the session was created.
+  final DateTime? createdAt;
 
   /// Expiration timestamp.
   final DateTime expiresAt;
@@ -36,6 +52,10 @@ class AuthSession {
     String? id,
     String? userId,
     Object? tenantId = _sentinel,
+    Object? handle = _sentinel,
+    Object? userAgent = _sentinel,
+    Object? ipAddress = _sentinel,
+    Object? createdAt = _sentinel,
     DateTime? expiresAt,
     bool? revoked,
     Set<String>? scopes,
@@ -46,6 +66,17 @@ class AuthSession {
       tenantId: identical(tenantId, _sentinel)
           ? this.tenantId
           : tenantId as String?,
+      handle:
+          identical(handle, _sentinel) ? this.handle : handle as String?,
+      userAgent: identical(userAgent, _sentinel)
+          ? this.userAgent
+          : userAgent as String?,
+      ipAddress: identical(ipAddress, _sentinel)
+          ? this.ipAddress
+          : ipAddress as String?,
+      createdAt: identical(createdAt, _sentinel)
+          ? this.createdAt
+          : createdAt as DateTime?,
       expiresAt: expiresAt ?? this.expiresAt,
       revoked: revoked ?? this.revoked,
       scopes: scopes ?? this.scopes,
@@ -57,6 +88,10 @@ class AuthSession {
     'id': id,
     'userId': userId,
     'tenantId': tenantId,
+    'handle': handle,
+    'userAgent': userAgent,
+    'ipAddress': ipAddress,
+    'createdAt': createdAt?.toIso8601String(),
     'expiresAt': expiresAt.toIso8601String(),
     'revoked': revoked,
     'scopes': scopes.toList(growable: false),

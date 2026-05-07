@@ -11,6 +11,12 @@ class _UserStore implements UserStore {
 
   @override
   Future<AuthUser> save(AuthUser user) async => user;
+
+  @override
+  Future<AuthUser> update(AuthUser user) async => user;
+
+  @override
+  Future<void> delete(String id) async {}
 }
 
 class _SessionStore implements SessionStore {
