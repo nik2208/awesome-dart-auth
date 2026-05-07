@@ -1,0 +1,168 @@
+import 'package:meta/meta.dart';
+
+/// Configuration for an outbound email delivery endpoint.
+@immutable
+class MailerConfig {
+  /// Creates a mailer configuration.
+  const MailerConfig({
+    required this.endpoint,
+    required this.apiKey,
+    required this.fromAddress,
+    this.fromName,
+  });
+
+  /// HTTP endpoint that accepts a POST with the email payload.
+  final String endpoint;
+
+  /// API key sent as a bearer token to the mailer endpoint.
+  final String apiKey;
+
+  /// Sender address.
+  final String fromAddress;
+
+  /// Optional human-readable sender name.
+  final String? fromName;
+}
+
+/// Configuration for an outbound SMS delivery endpoint.
+@immutable
+class SmsConfig {
+  /// Creates an SMS configuration.
+  const SmsConfig({
+    required this.endpoint,
+    required this.apiKey,
+    this.username,
+    this.password,
+  });
+
+  /// HTTP endpoint that accepts a POST with the SMS payload.
+  final String endpoint;
+
+  /// API key sent as a bearer token to the SMS endpoint.
+  final String apiKey;
+
+  /// Optional username for basic-auth protected endpoints.
+  final String? username;
+
+  /// Optional password for basic-auth protected endpoints.
+  final String? password;
+}
+
+/// Options for dispatching an outbound email.
+@immutable
+class SendEmailOptions {
+  /// Creates send-email options.
+  const SendEmailOptions({
+    required this.to,
+    required this.subject,
+    this.html,
+    this.text,
+  });
+
+  /// Recipient email address.
+  final String to;
+
+  /// Email subject line.
+  final String subject;
+
+  /// HTML body.
+  final String? html;
+
+  /// Plain-text body.
+  final String? text;
+}
+
+/// Options for dispatching an outbound SMS.
+@immutable
+class SendSmsOptions {
+  /// Creates send-SMS options.
+  const SendSmsOptions({required this.to, required this.message});
+
+  /// Recipient phone number in E.164 format.
+  final String to;
+
+  /// Message body.
+  final String message;
+}
+
+/// Standalone multi-channel notification service.
+///
+/// Wraps an HTTP-based email endpoint and an HTTP-based SMS endpoint.
+class NotificationService {
+  /// Creates a notification service.
+  NotificationService({this.email, this.sms});
+
+  /// Email delivery configuration.
+  final MailerConfig? email;
+
+  /// SMS delivery configuration.
+  final SmsConfig? sms;
+
+  /// Sends an email via the configured [email] endpoint.
+  ///
+  /// Throws a [StateError] if no [email] configuration has been provided.
+  Future<void> sendEmail(SendEmailOptions options) async {
+    final cfg = email;
+    if (cfg == null) {
+      throw StateError(
+        'No MailerConfig provided to NotificationService. '
+        'Construct NotificationService with an email: MailerConfig(…) to '
+        'enable email delivery.',
+      );
+    }
+    await _postJson(
+      cfg.endpoint,
+      cfg.apiKey,
+      <String, Object?>{
+        'to': options.to,
+        'subject': options.subject,
+        if (options.html != null) 'html': options.html,
+        if (options.text != null) 'text': options.text,
+        'from': cfg.fromAddress,
+        if (cfg.fromName != null) 'fromName': cfg.fromName,
+      },
+    );
+  }
+
+  /// Sends an SMS via the configured [sms] endpoint.
+  ///
+  /// Throws a [StateError] if no [sms] configuration has been provided.
+  Future<void> sendSms(SendSmsOptions options) async {
+    final cfg = sms;
+    if (cfg == null) {
+      throw StateError(
+        'No SmsConfig provided to NotificationService. '
+        'Construct NotificationService with a sms: SmsConfig(…) to '
+        'enable SMS delivery.',
+      );
+    }
+    await _postJson(
+      cfg.endpoint,
+      cfg.apiKey,
+      <String, Object?>{'to': options.to, 'message': options.message},
+    );
+  }
+
+  /// Posts [body] as JSON to [url] using [apiKey] for bearer-token auth.
+  ///
+  /// Override this method in tests to stub HTTP calls.
+  Future<void> _postJson(
+    String url,
+    String apiKey,
+    Map<String, Object?> body,
+  ) async {
+    // In a real implementation this would use `package:http` or a similar
+    // HTTP client.  The abstraction intentionally keeps the core package
+    // free of mandatory HTTP-client dependencies by delegating to the
+    // NotificationService.send* callbacks in AuthConfig.
+    //
+    // Integrators that need live delivery should override this method or
+    // supply `onSmsSend` / `onForgotPassword` callbacks in AuthConfig.
+    throw UnimplementedError(
+      'NotificationService._postJson is not implemented. '
+      'Provide onSmsSend / onForgotPassword callbacks in AuthConfig, '
+      'or use a custom NotificationService subclass that calls your HTTP '
+      'client of choice.',
+    );
+  }
+}

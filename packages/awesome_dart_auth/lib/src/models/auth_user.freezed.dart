@@ -25,9 +25,15 @@ mixin _$AuthUser {
   String get email => throw _privateConstructorUsedError;
   String? get passwordHash => throw _privateConstructorUsedError;
   String? get tenantId => throw _privateConstructorUsedError;
+  String? get firstName => throw _privateConstructorUsedError;
+  String? get lastName => throw _privateConstructorUsedError;
+  String? get phoneNumber => throw _privateConstructorUsedError;
+  String? get totpSecret => throw _privateConstructorUsedError;
   List<String> get providers => throw _privateConstructorUsedError;
   List<String> get roles => throw _privateConstructorUsedError;
   bool get isActive => throw _privateConstructorUsedError;
+  bool get emailVerified => throw _privateConstructorUsedError;
+  bool get totpEnabled => throw _privateConstructorUsedError;
   DateTime? get createdAt => throw _privateConstructorUsedError;
   DateTime? get updatedAt => throw _privateConstructorUsedError;
 
@@ -51,9 +57,15 @@ abstract class $AuthUserCopyWith<$Res> {
     String email,
     String? passwordHash,
     String? tenantId,
+    String? firstName,
+    String? lastName,
+    String? phoneNumber,
+    String? totpSecret,
     List<String> providers,
     List<String> roles,
     bool isActive,
+    bool emailVerified,
+    bool totpEnabled,
     DateTime? createdAt,
     DateTime? updatedAt,
   });
@@ -78,9 +90,15 @@ class _$AuthUserCopyWithImpl<$Res, $Val extends AuthUser>
     Object? email = null,
     Object? passwordHash = freezed,
     Object? tenantId = freezed,
+    Object? firstName = freezed,
+    Object? lastName = freezed,
+    Object? phoneNumber = freezed,
+    Object? totpSecret = freezed,
     Object? providers = null,
     Object? roles = null,
     Object? isActive = null,
+    Object? emailVerified = null,
+    Object? totpEnabled = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -102,6 +120,22 @@ class _$AuthUserCopyWithImpl<$Res, $Val extends AuthUser>
                 ? _value.tenantId
                 : tenantId // ignore: cast_nullable_to_non_nullable
                       as String?,
+            firstName: freezed == firstName
+                ? _value.firstName
+                : firstName // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            lastName: freezed == lastName
+                ? _value.lastName
+                : lastName // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            phoneNumber: freezed == phoneNumber
+                ? _value.phoneNumber
+                : phoneNumber // ignore: cast_nullable_to_non_nullable
+                      as String?,
+            totpSecret: freezed == totpSecret
+                ? _value.totpSecret
+                : totpSecret // ignore: cast_nullable_to_non_nullable
+                      as String?,
             providers: null == providers
                 ? _value.providers
                 : providers // ignore: cast_nullable_to_non_nullable
@@ -113,6 +147,14 @@ class _$AuthUserCopyWithImpl<$Res, $Val extends AuthUser>
             isActive: null == isActive
                 ? _value.isActive
                 : isActive // ignore: cast_nullable_to_non_nullable
+                      as bool,
+            emailVerified: null == emailVerified
+                ? _value.emailVerified
+                : emailVerified // ignore: cast_nullable_to_non_nullable
+                      as bool,
+            totpEnabled: null == totpEnabled
+                ? _value.totpEnabled
+                : totpEnabled // ignore: cast_nullable_to_non_nullable
                       as bool,
             createdAt: freezed == createdAt
                 ? _value.createdAt
@@ -142,9 +184,15 @@ abstract class _$$AuthUserImplCopyWith<$Res>
     String email,
     String? passwordHash,
     String? tenantId,
+    String? firstName,
+    String? lastName,
+    String? phoneNumber,
+    String? totpSecret,
     List<String> providers,
     List<String> roles,
     bool isActive,
+    bool emailVerified,
+    bool totpEnabled,
     DateTime? createdAt,
     DateTime? updatedAt,
   });
@@ -168,9 +216,15 @@ class __$$AuthUserImplCopyWithImpl<$Res>
     Object? email = null,
     Object? passwordHash = freezed,
     Object? tenantId = freezed,
+    Object? firstName = freezed,
+    Object? lastName = freezed,
+    Object? phoneNumber = freezed,
+    Object? totpSecret = freezed,
     Object? providers = null,
     Object? roles = null,
     Object? isActive = null,
+    Object? emailVerified = null,
+    Object? totpEnabled = null,
     Object? createdAt = freezed,
     Object? updatedAt = freezed,
   }) {
@@ -192,6 +246,22 @@ class __$$AuthUserImplCopyWithImpl<$Res>
             ? _value.tenantId
             : tenantId // ignore: cast_nullable_to_non_nullable
                   as String?,
+        firstName: freezed == firstName
+            ? _value.firstName
+            : firstName // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        lastName: freezed == lastName
+            ? _value.lastName
+            : lastName // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        phoneNumber: freezed == phoneNumber
+            ? _value.phoneNumber
+            : phoneNumber // ignore: cast_nullable_to_non_nullable
+                  as String?,
+        totpSecret: freezed == totpSecret
+            ? _value.totpSecret
+            : totpSecret // ignore: cast_nullable_to_non_nullable
+                  as String?,
         providers: null == providers
             ? _value._providers
             : providers // ignore: cast_nullable_to_non_nullable
@@ -203,6 +273,14 @@ class __$$AuthUserImplCopyWithImpl<$Res>
         isActive: null == isActive
             ? _value.isActive
             : isActive // ignore: cast_nullable_to_non_nullable
+                  as bool,
+        emailVerified: null == emailVerified
+            ? _value.emailVerified
+            : emailVerified // ignore: cast_nullable_to_non_nullable
+                  as bool,
+        totpEnabled: null == totpEnabled
+            ? _value.totpEnabled
+            : totpEnabled // ignore: cast_nullable_to_non_nullable
                   as bool,
         createdAt: freezed == createdAt
             ? _value.createdAt
@@ -225,9 +303,15 @@ class _$AuthUserImpl implements _AuthUser {
     required this.email,
     this.passwordHash,
     this.tenantId,
+    this.firstName,
+    this.lastName,
+    this.phoneNumber,
+    this.totpSecret,
     final List<String> providers = const <String>[],
     final List<String> roles = const <String>[],
     this.isActive = true,
+    this.emailVerified = false,
+    this.totpEnabled = false,
     this.createdAt,
     this.updatedAt,
   }) : _providers = providers,
@@ -244,6 +328,14 @@ class _$AuthUserImpl implements _AuthUser {
   final String? passwordHash;
   @override
   final String? tenantId;
+  @override
+  final String? firstName;
+  @override
+  final String? lastName;
+  @override
+  final String? phoneNumber;
+  @override
+  final String? totpSecret;
   final List<String> _providers;
   @override
   @JsonKey()
@@ -266,13 +358,19 @@ class _$AuthUserImpl implements _AuthUser {
   @JsonKey()
   final bool isActive;
   @override
+  @JsonKey()
+  final bool emailVerified;
+  @override
+  @JsonKey()
+  final bool totpEnabled;
+  @override
   final DateTime? createdAt;
   @override
   final DateTime? updatedAt;
 
   @override
   String toString() {
-    return 'AuthUser(id: $id, email: $email, passwordHash: $passwordHash, tenantId: $tenantId, providers: $providers, roles: $roles, isActive: $isActive, createdAt: $createdAt, updatedAt: $updatedAt)';
+    return 'AuthUser(id: $id, email: $email, passwordHash: $passwordHash, tenantId: $tenantId, firstName: $firstName, lastName: $lastName, phoneNumber: $phoneNumber, totpSecret: $totpSecret, providers: $providers, roles: $roles, isActive: $isActive, emailVerified: $emailVerified, totpEnabled: $totpEnabled, createdAt: $createdAt, updatedAt: $updatedAt)';
   }
 
   @override
@@ -286,6 +384,14 @@ class _$AuthUserImpl implements _AuthUser {
                 other.passwordHash == passwordHash) &&
             (identical(other.tenantId, tenantId) ||
                 other.tenantId == tenantId) &&
+            (identical(other.firstName, firstName) ||
+                other.firstName == firstName) &&
+            (identical(other.lastName, lastName) ||
+                other.lastName == lastName) &&
+            (identical(other.phoneNumber, phoneNumber) ||
+                other.phoneNumber == phoneNumber) &&
+            (identical(other.totpSecret, totpSecret) ||
+                other.totpSecret == totpSecret) &&
             const DeepCollectionEquality().equals(
               other._providers,
               _providers,
@@ -293,6 +399,10 @@ class _$AuthUserImpl implements _AuthUser {
             const DeepCollectionEquality().equals(other._roles, _roles) &&
             (identical(other.isActive, isActive) ||
                 other.isActive == isActive) &&
+            (identical(other.emailVerified, emailVerified) ||
+                other.emailVerified == emailVerified) &&
+            (identical(other.totpEnabled, totpEnabled) ||
+                other.totpEnabled == totpEnabled) &&
             (identical(other.createdAt, createdAt) ||
                 other.createdAt == createdAt) &&
             (identical(other.updatedAt, updatedAt) ||
@@ -307,9 +417,15 @@ class _$AuthUserImpl implements _AuthUser {
     email,
     passwordHash,
     tenantId,
+    firstName,
+    lastName,
+    phoneNumber,
+    totpSecret,
     const DeepCollectionEquality().hash(_providers),
     const DeepCollectionEquality().hash(_roles),
     isActive,
+    emailVerified,
+    totpEnabled,
     createdAt,
     updatedAt,
   );
@@ -334,9 +450,15 @@ abstract class _AuthUser implements AuthUser {
     required final String email,
     final String? passwordHash,
     final String? tenantId,
+    final String? firstName,
+    final String? lastName,
+    final String? phoneNumber,
+    final String? totpSecret,
     final List<String> providers,
     final List<String> roles,
     final bool isActive,
+    final bool emailVerified,
+    final bool totpEnabled,
     final DateTime? createdAt,
     final DateTime? updatedAt,
   }) = _$AuthUserImpl;
@@ -353,11 +475,23 @@ abstract class _AuthUser implements AuthUser {
   @override
   String? get tenantId;
   @override
+  String? get firstName;
+  @override
+  String? get lastName;
+  @override
+  String? get phoneNumber;
+  @override
+  String? get totpSecret;
+  @override
   List<String> get providers;
   @override
   List<String> get roles;
   @override
   bool get isActive;
+  @override
+  bool get emailVerified;
+  @override
+  bool get totpEnabled;
   @override
   DateTime? get createdAt;
   @override
