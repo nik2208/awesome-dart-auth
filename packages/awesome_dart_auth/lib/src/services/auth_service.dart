@@ -50,7 +50,7 @@ class AuthService {
       throw ArgumentError.value(
         password,
         'password',
-        'must be at least 8 chars',
+        'Password must be at least 8 characters long.',
       );
     }
     return BCrypt.hashpw(password, BCrypt.gensalt());

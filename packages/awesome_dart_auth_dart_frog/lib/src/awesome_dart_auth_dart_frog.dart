@@ -25,20 +25,18 @@ Middleware awesomeDartAuthMiddleware(AuthRouter router) {
 }
 
 Future<shelf.Request> _toShelfRequest(Request request) async {
-  final body = await request.body();
   return shelf.Request(
     request.method.value,
     request.uri,
     headers: request.headers,
-    body: body,
+    body: request.bytes(),
   );
 }
 
 Future<Response> _toDartFrogResponse(shelf.Response response) async {
-  final body = await response.readAsString();
-  return Response(
+  return Response.stream(
     statusCode: response.statusCode,
-    body: body,
+    body: response.read(),
     headers: Map<String, Object>.from(response.headers),
   );
 }
