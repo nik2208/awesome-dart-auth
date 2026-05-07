@@ -1,0 +1,45 @@
+name: Publish to pub.dev
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    name: Build and publish to pub.dev
+    runs-on: ubuntu-latest
+    environment: pubdev
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: "3.11.0"
+
+      - name: Install dependencies
+        run: |
+          dart pub get
+          dart run melos bootstrap
+
+      - name: Run checks before publishing
+        run: |
+          dart run melos analyze
+          dart run melos test
+
+      - name: Configure pub credentials
+        env:
+          PUB_CREDENTIALS: ${{ secrets.PUB_CREDENTIALS }}
+        run: |
+          mkdir -p "$HOME/.pub-cache"
+          printf '%s' "$PUB_CREDENTIALS" > "$HOME/.pub-cache/credentials.json"
+
+      - name: Publish package
+        run: |
+          cd packages/awesome_dart_auth
+          dart pub publish --force
