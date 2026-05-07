@@ -1,0 +1,27 @@
+library awesome_dart_auth;
+
+export 'src/config/auth_config.dart';
+export 'src/contracts/api_key_store.dart';
+export 'src/contracts/mailer_transport.dart';
+export 'src/contracts/pending_link_store.dart';
+export 'src/contracts/roles_permissions_store.dart';
+export 'src/contracts/session_store.dart';
+export 'src/contracts/sse_distributor.dart';
+export 'src/contracts/telemetry_store.dart';
+export 'src/contracts/user_store.dart';
+export 'src/events/auth_event.dart';
+export 'src/events/auth_event_bus.dart';
+export 'src/idp/openid_endpoints.dart';
+export 'src/models/api_key_record.dart';
+export 'src/models/auth_session.dart';
+export 'src/models/auth_user.dart';
+export 'src/models/mail_message.dart';
+export 'src/models/pending_link_record.dart';
+export 'src/models/token_pair.dart';
+export 'src/routing/auth_router.dart';
+export 'src/routing/openapi_document.dart';
+export 'src/services/auth_service.dart';
+export 'src/templates/template_renderer.dart';
+export 'src/ui/embedded_assets.dart';
+export 'src/webhooks/webhook_action_registry.dart';
+export 'src/webhooks/webhook_signer.dart';

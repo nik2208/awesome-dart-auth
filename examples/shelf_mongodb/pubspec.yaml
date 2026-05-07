@@ -1,0 +1,18 @@
+name: shelf_mongodb
+publish_to: none
+description: Shelf integration example for awesome-dart-auth.
+version: 0.1.0
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  awesome_dart_auth:
+    path: ../../packages/awesome_dart_auth
+  awesome_dart_auth_shelf:
+    path: ../../packages/awesome_dart_auth_shelf
+  shelf: ^1.4.2
+  shelf_router: ^1.1.4
+
+dev_dependencies:
+  very_good_analysis: ^9.0.0

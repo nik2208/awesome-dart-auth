@@ -1,0 +1,17 @@
+name: dart_frog_postgres
+publish_to: none
+description: Dart Frog integration example for awesome-dart-auth.
+version: 0.1.0
+
+environment:
+  sdk: ^3.11.0
+
+dependencies:
+  awesome_dart_auth:
+    path: ../../packages/awesome_dart_auth
+  awesome_dart_auth_dart_frog:
+    path: ../../packages/awesome_dart_auth_dart_frog
+  dart_frog: ^1.2.0
+
+dev_dependencies:
+  very_good_analysis: ^9.0.0
