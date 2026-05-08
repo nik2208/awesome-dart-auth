@@ -65,8 +65,8 @@ examples/
 ```bash
 dart pub get
 dart run melos bootstrap
-dart run melos analyze
-dart run melos test
+dart run melos run analyze
+dart run melos run test
 ```
 
 ---

@@ -28,7 +28,7 @@ jobs:
           dart run melos bootstrap
 
       - name: Analyze
-        run: dart run melos analyze
+        run: dart run melos run analyze
 
       - name: Test
-        run: dart run melos test
+        run: dart run melos run test
