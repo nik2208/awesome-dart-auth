@@ -112,5 +112,32 @@ void main() {
         throwsA(isA<StateError>()),
       );
     });
+
+    test('sendSms throws StateError on non-2xx response', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      server.listen((request) async {
+        request.response.statusCode = HttpStatus.badGateway;
+        await request.response.close();
+      });
+
+      addTearDown(() => server.close(force: true));
+
+      final service = NotificationService(
+        sms: SmsConfig(
+          endpoint: 'http://${server.address.host}:${server.port}/sms',
+          apiKey: 'sms-key',
+        ),
+      );
+
+      expect(
+        () => service.sendSms(
+          const SendSmsOptions(
+            to: '+39123456789',
+            message: 'ciao',
+          ),
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
   });
 }
