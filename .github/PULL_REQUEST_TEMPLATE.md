@@ -21,7 +21,7 @@ Closes # <!-- issue number, if applicable -->
 
 Describe how you tested these changes:
 
-- [ ] Existing checks pass (`dart run melos analyze` and `dart run melos test`)
+- [ ] Existing checks pass (`dart run melos run analyze` and `dart run melos run test`)
 - [ ] New tests added that cover the change
 - [ ] Manually tested against a real application
 
