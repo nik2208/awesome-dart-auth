@@ -3,8 +3,10 @@ import 'dart:math';
 
 import 'package:awesome_dart_auth/src/config/auth_callbacks.dart';
 import 'package:awesome_dart_auth/src/config/auth_config.dart';
+import 'package:awesome_dart_auth/src/contracts/token_store.dart';
 import 'package:awesome_dart_auth/src/idp/openid_endpoints.dart';
 import 'package:awesome_dart_auth/src/models/auth_user.dart';
+import 'package:awesome_dart_auth/src/models/token_record.dart';
 import 'package:awesome_dart_auth/src/routing/openapi_document.dart';
 import 'package:awesome_dart_auth/src/services/auth_service.dart';
 import 'package:awesome_dart_auth/src/templates/template_renderer.dart';
@@ -19,6 +21,7 @@ class AuthRouter {
   AuthRouter({
     required this.config,
     required this.authService,
+    this.tokenStore,
     TemplateRenderer? templateRenderer,
     AuthCallbacks? callbacks,
   }) : templateRenderer =
@@ -32,6 +35,9 @@ class AuthRouter {
 
   /// Core auth service.
   final AuthService authService;
+
+  /// Optional store for temporary verification and reset tokens.
+  final TokenStore? tokenStore;
 
   /// Template renderer backing localized mail rendering.
   final TemplateRenderer templateRenderer;
@@ -258,6 +264,19 @@ class AuthRouter {
           final user = await authService.userStore.findByEmail(email);
           if (user != null) {
             final token = authService.generateRandomToken();
+            final store = tokenStore;
+            if (store != null) {
+              await store.save(
+                TokenRecord(
+                  token: token,
+                  purpose: 'password_reset',
+                  userId: user.id,
+                  email: user.email,
+                  createdAt: DateTime.now().toUtc(),
+                  expiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
+                ),
+              );
+            }
             final cb = callbacks.onForgotPassword;
             if (cb == null) {
               return _notImplemented(
@@ -269,9 +288,36 @@ class AuthRouter {
           return _ok({'ok': true});
         },
       )
-      ..post('${config.apiBasePath}/reset-password', (_) => _notImplemented(
-        'Supply a token verification store to enable password reset.',
-      ))
+      ..post('${config.apiBasePath}/reset-password', (Request request) async {
+        final store = tokenStore;
+        if (store == null) {
+          return _notImplemented(
+            'Supply a TokenStore to enable password reset.',
+          );
+        }
+        final body = await _readJson(request);
+        final token = body['token'] as String?;
+        final newPassword = body['newPassword'] as String?;
+        if (token == null || newPassword == null) {
+          return _badRequest('token and newPassword are required');
+        }
+        final record = await store.findByToken(token);
+        if (!_isUsableToken(record, purpose: 'password_reset')) {
+          return _authError('Invalid or expired password reset token.');
+        }
+        final user = await authService.userStore.findById(record!.userId);
+        if (user == null) {
+          return _authError('Invalid password reset token.');
+        }
+        await authService.userStore.update(
+          user.copyWith(
+            passwordHash: authService.hashPassword(newPassword),
+            updatedAt: DateTime.now().toUtc(),
+          ),
+        );
+        await store.consume(token);
+        return _ok({'ok': true});
+      })
       ..post(
         '${config.apiBasePath}/change-password',
         (Request request) async {
@@ -309,16 +355,52 @@ class AuthRouter {
               'onSendVerificationEmail callback not configured',
             );
           }
-          await cb(user, authService.generateRandomToken());
+          final token = authService.generateRandomToken();
+          final store = tokenStore;
+          if (store != null) {
+            await store.save(
+              TokenRecord(
+                token: token,
+                purpose: 'verify_email',
+                userId: user.id,
+                email: user.email,
+                createdAt: DateTime.now().toUtc(),
+                expiresAt: DateTime.now().toUtc().add(const Duration(hours: 24)),
+              ),
+            );
+          }
+          await cb(user, token);
           return _ok({'ok': true});
         },
       )
-      ..get(
-        '${config.apiBasePath}/verify-email',
-        (_) => _notImplemented(
-          'Supply a token verification store to enable email verification.',
-        ),
-      )
+      ..get('${config.apiBasePath}/verify-email', (Request request) async {
+        final store = tokenStore;
+        if (store == null) {
+          return _notImplemented(
+            'Supply a TokenStore to enable email verification.',
+          );
+        }
+        final token = request.url.queryParameters['token'];
+        if (token == null || token.isEmpty) {
+          return _badRequest('token query parameter is required');
+        }
+        final record = await store.findByToken(token);
+        if (!_isUsableToken(record, purpose: 'verify_email')) {
+          return _authError('Invalid or expired verification token.');
+        }
+        final user = await authService.userStore.findById(record!.userId);
+        if (user == null) {
+          return _authError('Invalid verification token.');
+        }
+        await authService.userStore.update(
+          user.copyWith(
+            emailVerified: true,
+            updatedAt: DateTime.now().toUtc(),
+          ),
+        );
+        await store.consume(token);
+        return _ok({'ok': true});
+      })
       ..post(
         '${config.apiBasePath}/change-email/request',
         (Request request) async {
@@ -333,16 +415,65 @@ class AuthRouter {
               'onSendVerificationEmail callback not configured',
             );
           }
-          await cb(user, authService.generateRandomToken());
+          final token = authService.generateRandomToken();
+          final store = tokenStore;
+          if (store != null) {
+            await store.save(
+              TokenRecord(
+                token: token,
+                purpose: 'change_email',
+                userId: user.id,
+                email: user.email,
+                newEmail: newEmail,
+                createdAt: DateTime.now().toUtc(),
+                expiresAt: DateTime.now().toUtc().add(const Duration(hours: 24)),
+              ),
+            );
+          }
+          await cb(user, token);
           return _ok({'ok': true});
         },
       )
       ..post(
         '${config.apiBasePath}/change-email/confirm',
-        (_) => _notImplemented(
-          'Supply a token verification store to enable email-change '
-          'confirmation.',
-        ),
+        (Request request) async {
+          final store = tokenStore;
+          if (store == null) {
+            return _notImplemented(
+              'Supply a TokenStore to enable email-change confirmation.',
+            );
+          }
+          final body = await _readJson(request);
+          final token = body['token'] as String?;
+          if (token == null || token.isEmpty) {
+            return _badRequest('token is required');
+          }
+          final record = await store.findByToken(token);
+          if (!_isUsableToken(record, purpose: 'change_email')) {
+            return _authError('Invalid or expired change-email token.');
+          }
+          final nextEmail = record!.newEmail;
+          if (nextEmail == null || nextEmail.isEmpty) {
+            return _badRequest('change-email token does not contain newEmail');
+          }
+          final existing = await authService.userStore.findByEmail(nextEmail);
+          if (existing != null && existing.id != record.userId) {
+            return _badRequest('Email already in use');
+          }
+          final user = await authService.userStore.findById(record.userId);
+          if (user == null) {
+            return _authError('Invalid change-email token.');
+          }
+          await authService.userStore.update(
+            user.copyWith(
+              email: nextEmail,
+              emailVerified: true,
+              updatedAt: DateTime.now().toUtc(),
+            ),
+          );
+          await store.consume(token);
+          return _ok({'ok': true});
+        },
       );
   }
 
@@ -782,5 +913,13 @@ class AuthRouter {
   String _sixDigitOtp() {
     final n = Random.secure().nextInt(1000000);
     return n.toString().padLeft(6, '0');
+  }
+
+  bool _isUsableToken(TokenRecord? record, {required String purpose}) {
+    if (record == null) return false;
+    if (record.purpose != purpose) return false;
+    if (record.isConsumed) return false;
+    if (record.isExpiredAt(DateTime.now().toUtc())) return false;
+    return true;
   }
 }

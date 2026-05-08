@@ -30,14 +30,14 @@ Supports **both authentication strategies** used by those clients:
 | Token management (cookie/bearer, access/refresh rotation, secure cookies) | ✅ Implemented | Cookie + bearer mode, rotation, and optional `cookiePrefix` (`__Host-` / `__Secure-`) via `AuthConfig`. |
 | Identity Provider (IdP) mode (RS256 + JWKS + resource server validation) | ✅ Implemented | OIDC discovery + JWKS endpoint exposed; `enableIdpMode` flag controls availability. |
 | Stateful sessions | ✅ Implemented | Session lifecycle with revocation checks configurable via `AuthConfig.sessionCheckOn` (`allCalls` / `refresh` / `none`). |
-| Dynamic email templates + UI i18n fallback | ✅ Implemented | `TemplateStore` contract + `TemplateRenderer` with built-in `en` and `it` locales and Mustache rendering. |
+| Dynamic email templates + UI i18n fallback | ✅ Implemented | `TemplateStore` contract + `TemplateRenderer` with built-in `en`/`it` locales and core mail templates (`password_reset`, `magic_link`, `welcome`, `verify_email`, `email_changed`, `invitation`). |
 | CSRF protection | ✅ Implemented | `csrfMiddleware()` uses cookie + header double-submit validation for browser flows; bearer requests skip validation. |
 | Account management | ✅ Implemented | Register, login, logout, me, profile update, password / email change, verification, and account deletion. |
 | Account linking | ✅ Implemented | Link request/verify plus linked-account listing and unlinking via `AuthCallbacks`. |
 | RBAC | ✅ Implemented | `RolesPermissionsStore` with role-enriched JWT claims. |
 | Multi-tenancy | ✅ Implemented | `TenantStore` contract and `tenantId` propagation through models and tokens. |
-| Admin panel | ✅ Implemented | Embedded admin SPA shell served by `AuthRouter` at `/auth/admin`. |
-| Built-in UI + auth runtime (`auth.js`) | ✅ Implemented | Embedded auth UI and browser SDK served at `/auth/ui` and `/auth/ui/auth.js`. |
+| Admin panel | ➖ Partial | Embedded admin shell is served by `AuthRouter` at `/auth/admin`; full Node admin SPA parity is still in progress. |
+| Built-in UI + auth runtime (`auth.js`) | ✅ Implemented | Embedded auth UI + browser runtime served at `/auth/ui` and `/auth/ui/auth.js` for register/login/logout/me/refresh and password-reset/magic-link flows. |
 | Client libraries compatibility (Angular + Flutter) | ✅ Implemented | Cookie+CSRF (web) and bearer (native) strategies are both supported. |
 | Event-driven tooling (event bus, SSE, inbound/outbound webhooks, telemetry, notify channels) | ✅ Implemented | `AuthTools`, `AuthEventBus`, `SseDistributor`, webhook signing, telemetry, and multi-channel `notify()`. |
 | API keys (M2M) | ✅ Implemented | `ApiKeyStore` contract and `ApiKeyRecord` model available. |

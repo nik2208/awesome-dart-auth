@@ -54,6 +54,25 @@ class _SessionStore implements SessionStore {
   }
 }
 
+class _TokenStore implements TokenStore {
+  final Map<String, TokenRecord> _tokens = <String, TokenRecord>{};
+
+  @override
+  Future<void> consume(String token) async {
+    final current = _tokens[token];
+    if (current == null) return;
+    _tokens[token] = current.copyWith(consumedAt: DateTime.now().toUtc());
+  }
+
+  @override
+  Future<TokenRecord?> findByToken(String token) async => _tokens[token];
+
+  @override
+  Future<void> save(TokenRecord record) async {
+    _tokens[record.token] = record;
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -70,6 +89,7 @@ void main() {
     late AuthConfig config;
     late _UserStore userStore;
     late _SessionStore sessionStore;
+    late _TokenStore tokenStore;
     late AuthService service;
     late AuthRouter router;
 
@@ -77,12 +97,17 @@ void main() {
       config = AuthConfig.development(jwtSecret: 'secret1234');
       userStore = _UserStore();
       sessionStore = _SessionStore();
+      tokenStore = _TokenStore();
       service = AuthService(
         config: config,
         userStore: userStore,
         sessionStore: sessionStore,
       );
-      router = AuthRouter(config: config, authService: service);
+      router = AuthRouter(
+        config: config,
+        authService: service,
+        tokenStore: tokenStore,
+      );
     });
 
     test('serves embedded auth UI', () async {
@@ -349,6 +374,143 @@ void main() {
 
       expect(response.statusCode, 200);
       expect(body['theme'], 'dark');
+    });
+
+    test('resets password via token store using POST /auth/reset-password', () async {
+      final registerResponse = await router.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/register'),
+          body: jsonEncode({
+            'email': 'reset-user@example.com',
+            'password': 'OldPassword1!',
+          }),
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      final registerBody = _jsonBody(await registerResponse.readAsString());
+      final user = registerBody['user'] as Map<String, dynamic>;
+
+      await tokenStore.save(
+        TokenRecord(
+          token: 'reset-token',
+          purpose: 'password_reset',
+          userId: user['id'] as String,
+          email: user['email'] as String,
+          createdAt: DateTime.now().toUtc(),
+          expiresAt: DateTime.now().toUtc().add(const Duration(hours: 1)),
+        ),
+      );
+
+      final resetResponse = await router.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/reset-password'),
+          body: jsonEncode({
+            'token': 'reset-token',
+            'newPassword': 'NewPassword1!',
+          }),
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      expect(resetResponse.statusCode, 200);
+
+      final loginResponse = await router.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/login'),
+          body: jsonEncode({
+            'email': 'reset-user@example.com',
+            'password': 'NewPassword1!',
+          }),
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      expect(loginResponse.statusCode, 200);
+    });
+
+    test('verifies email from GET /auth/verify-email token', () async {
+      final registerResponse = await router.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/register'),
+          body: jsonEncode({
+            'email': 'verify-user@example.com',
+            'password': 'StrongPass1!',
+          }),
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      final registerBody = _jsonBody(await registerResponse.readAsString());
+      final user = registerBody['user'] as Map<String, dynamic>;
+      final userId = user['id'] as String;
+
+      await tokenStore.save(
+        TokenRecord(
+          token: 'verify-token',
+          purpose: 'verify_email',
+          userId: userId,
+          email: 'verify-user@example.com',
+          createdAt: DateTime.now().toUtc(),
+          expiresAt: DateTime.now().toUtc().add(const Duration(hours: 24)),
+        ),
+      );
+
+      final verifyResponse = await router.handler(
+        Request(
+          'GET',
+          Uri.parse('http://localhost/auth/verify-email?token=verify-token'),
+        ),
+      );
+      expect(verifyResponse.statusCode, 200);
+
+      final saved = await userStore.findById(userId);
+      expect(saved, isNotNull);
+      expect(saved!.emailVerified, isTrue);
+    });
+
+    test('confirms change-email via token', () async {
+      final registerResponse = await router.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/register'),
+          body: jsonEncode({
+            'email': 'before-change@example.com',
+            'password': 'StrongPass1!',
+          }),
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      final registerBody = _jsonBody(await registerResponse.readAsString());
+      final user = registerBody['user'] as Map<String, dynamic>;
+      final userId = user['id'] as String;
+
+      await tokenStore.save(
+        TokenRecord(
+          token: 'change-token',
+          purpose: 'change_email',
+          userId: userId,
+          email: 'before-change@example.com',
+          newEmail: 'after-change@example.com',
+          createdAt: DateTime.now().toUtc(),
+          expiresAt: DateTime.now().toUtc().add(const Duration(hours: 24)),
+        ),
+      );
+
+      final confirmResponse = await router.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/change-email/confirm'),
+          body: jsonEncode({'token': 'change-token'}),
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      expect(confirmResponse.statusCode, 200);
+
+      final updated = await userStore.findById(userId);
+      expect(updated, isNotNull);
+      expect(updated!.email, 'after-change@example.com');
+      expect(updated.emailVerified, isTrue);
     });
 
     test('openapi.json lists the full route surface', () async {
