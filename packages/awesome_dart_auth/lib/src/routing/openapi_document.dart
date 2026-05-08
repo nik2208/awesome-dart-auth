@@ -15,27 +15,41 @@ Map<String, Object?> buildOpenApiDocument(AuthConfig config) => {
     config.adminUiPath: {
       'get': {'summary': 'Serve the embedded admin UI'},
     },
+    '${config.adminUiPath}/assets/admin.js': {
+      'get': {'summary': 'Serve the embedded admin runtime'},
+    },
+    '${config.adminUiPath}/assets/admin.css': {
+      'get': {'summary': 'Serve the embedded admin stylesheet'},
+    },
     config.authUiPath: {
-      'get': {'summary': 'Serve the embedded auth UI'},
+      'get': {'summary': 'Redirect to the embedded auth login page'},
+    },
+    '${config.authUiPath}/login': {
+      'get': {'summary': 'Serve the embedded auth login UI'},
     },
     config.authJsPath: {
       'get': {'summary': 'Serve the embedded browser SDK'},
+    },
+    '${config.apiBasePath}/ui/base.css': {
+      'get': {'summary': 'Serve the embedded auth stylesheet'},
     },
     '${config.apiBasePath}/ui/config': {
       'get': {'summary': 'Return static UI configuration'},
     },
     // ── OIDC / JWKS ───────────────────────────────────────────────────────
-    config.discoveryPath: {
-      'get': {'summary': 'Serve the OIDC discovery document'},
-    },
-    config.jwksPath: {
-      'get': {'summary': 'Serve the JSON Web Key Set'},
-    },
-    config.userInfoPath: {
-      'get': {'summary': 'Return user info based on the bearer token'},
-    },
-    config.tokenPath: {
-      'post': {'summary': 'Issue a demo access + refresh token pair'},
+    if (config.enableIdpMode) ...{
+      config.discoveryPath: {
+        'get': {'summary': 'Serve the OIDC discovery document'},
+      },
+      config.jwksPath: {
+        'get': {'summary': 'Serve the JSON Web Key Set'},
+      },
+      config.userInfoPath: {
+        'get': {'summary': 'Return user info based on the bearer token'},
+      },
+      config.tokenPath: {
+        'post': {'summary': 'Issue a demo access + refresh token pair'},
+      },
     },
     // ── Session ───────────────────────────────────────────────────────────
     '${config.apiBasePath}/register': {

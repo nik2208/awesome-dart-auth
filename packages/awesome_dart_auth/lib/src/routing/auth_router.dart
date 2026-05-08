@@ -3,9 +3,16 @@ import 'dart:math';
 
 import 'package:awesome_dart_auth/src/config/auth_callbacks.dart';
 import 'package:awesome_dart_auth/src/config/auth_config.dart';
+import 'package:awesome_dart_auth/src/contracts/admin_session_store.dart';
+import 'package:awesome_dart_auth/src/contracts/admin_user_store.dart';
+import 'package:awesome_dart_auth/src/contracts/api_key_store.dart';
+import 'package:awesome_dart_auth/src/contracts/template_store.dart';
+import 'package:awesome_dart_auth/src/contracts/tenant_store.dart';
 import 'package:awesome_dart_auth/src/contracts/token_store.dart';
 import 'package:awesome_dart_auth/src/idp/openid_endpoints.dart';
+import 'package:awesome_dart_auth/src/models/api_key_record.dart';
 import 'package:awesome_dart_auth/src/models/auth_user.dart';
+import 'package:awesome_dart_auth/src/models/tenant_record.dart';
 import 'package:awesome_dart_auth/src/models/token_record.dart';
 import 'package:awesome_dart_auth/src/routing/openapi_document.dart';
 import 'package:awesome_dart_auth/src/services/auth_service.dart';
@@ -22,6 +29,9 @@ class AuthRouter {
     required this.config,
     required this.authService,
     this.tokenStore,
+    this.tenantStore,
+    this.apiKeyStore,
+    this.templateStore,
     TemplateRenderer? templateRenderer,
     AuthCallbacks? callbacks,
   }) : templateRenderer =
@@ -39,11 +49,39 @@ class AuthRouter {
   /// Optional store for temporary verification and reset tokens.
   final TokenStore? tokenStore;
 
+  /// Optional tenant store for admin panel tenant management.
+  final TenantStore? tenantStore;
+
+  /// Optional API key store for admin API key management.
+  final ApiKeyStore? apiKeyStore;
+
+  /// Optional template store for dynamic template overrides.
+  final TemplateStore? templateStore;
+
   /// Template renderer backing localized mail rendering.
   final TemplateRenderer templateRenderer;
 
   /// Optional side-effect callbacks for auth flows.
   final AuthCallbacks callbacks;
+
+  final Map<String, Set<String>> _rolePermissions = <String, Set<String>>{};
+  final Map<String, Map<String, Object?>> _userMetadata =
+      <String, Map<String, Object?>>{};
+  final Map<String, Map<String, Object?>> _mailTemplates =
+      <String, Map<String, Object?>>{};
+  final Map<String, Map<String, String>> _uiTranslations =
+      <String, Map<String, String>>{};
+  final Map<String, Set<String>> _tenantMembers = <String, Set<String>>{};
+  final Map<String, ApiKeyRecord> _apiKeys = <String, ApiKeyRecord>{};
+  final Map<String, String> _apiKeyNames = <String, String>{};
+  final Map<String, Object?> _adminSettings = <String, Object?>{
+    'requireEmailVerification': false,
+    'require2FA': false,
+    'emailVerificationMode': 'none',
+    'lazyEmailVerificationGracePeriodDays': 7,
+    'enabledWebhookActions': <String>[],
+    'ui': <String, Object?>{},
+  };
 
   final Router _router = Router();
 
@@ -58,11 +96,37 @@ class AuthRouter {
           return Response.notFound('admin ui disabled');
         }
         return Response.ok(
-          embeddedAdminUi,
+          _buildAdminUiHtml(),
           headers: const {'content-type': 'text/html; charset=utf-8'},
         );
       })
+      ..get('${config.adminUiPath}/assets/admin.js', (_) {
+        if (!config.enableAdminUi) {
+          return Response.notFound('admin ui disabled');
+        }
+        return Response.ok(
+          embeddedAdminJs,
+          headers: const {
+            'content-type': 'application/javascript; charset=utf-8',
+          },
+        );
+      })
+      ..get('${config.adminUiPath}/assets/admin.css', (_) {
+        if (!config.enableAdminUi) {
+          return Response.notFound('admin ui disabled');
+        }
+        return Response.ok(
+          embeddedAdminCss,
+          headers: const {'content-type': 'text/css; charset=utf-8'},
+        );
+      })
       ..get(config.authUiPath, (_) {
+        if (!config.enableAuthUi) {
+          return Response.notFound('auth ui disabled');
+        }
+        return Response.found('${config.authUiPath}/login');
+      })
+      ..get('${config.authUiPath}/login', (_) {
         if (!config.enableAuthUi) {
           return Response.notFound('auth ui disabled');
         }
@@ -80,6 +144,15 @@ class AuthRouter {
           },
         ),
       )
+      ..get('${config.apiBasePath}/ui/base.css', (_) {
+        if (!config.enableAuthUi) {
+          return Response.notFound('auth ui disabled');
+        }
+        return Response.ok(
+          embeddedAuthBaseCss,
+          headers: const {'content-type': 'text/css; charset=utf-8'},
+        );
+      })
       ..get('${config.apiBasePath}/ui/config', (_) => _ok(config.uiConfig))
       ..get(config.openApiPath, (_) => _ok(buildOpenApiDocument(config)))
       ..get(config.discoveryPath, (_) {
@@ -88,8 +161,16 @@ class AuthRouter {
         }
         return _ok(openIdDiscoveryDocument(config));
       })
-      ..get(config.jwksPath, (_) => _ok(jsonWebKeySet()))
+      ..get(config.jwksPath, (_) {
+        if (!config.enableIdpMode) {
+          return Response.notFound('idp mode disabled');
+        }
+        return _ok(jsonWebKeySet());
+      })
       ..get(config.userInfoPath, (Request request) {
+        if (!config.enableIdpMode) {
+          return Response.notFound('idp mode disabled');
+        }
         final token = _extractBearer(request);
         if (token == null) return Response.forbidden('missing bearer token');
         final claims = authService.verifyToken(token);
@@ -103,6 +184,9 @@ class AuthRouter {
         });
       })
       ..post(config.tokenPath, (Request request) async {
+        if (!config.enableIdpMode) {
+          return Response.notFound('idp mode disabled');
+        }
         final payload = await _readJson(request);
         final user = AuthUser(
           id: (payload['userId'] as String?) ?? 'demo-user',
@@ -126,6 +210,7 @@ class AuthRouter {
     _registerDeviceSessionRoutes();
     _registerOAuthRoutes();
     _registerLinkingRoutes();
+    _registerAdminApiRoutes();
   }
 
   // ---------------------------------------------------------------------------
@@ -827,6 +912,437 @@ class AuthRouter {
   }
 
   // ---------------------------------------------------------------------------
+  // Admin API
+  // ---------------------------------------------------------------------------
+
+  void _registerAdminApiRoutes() {
+    final base = '${config.adminUiPath}/api';
+    _router
+      ..get('$base/ping', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        return _ok({'ok': true, 'userId': user.id});
+      })
+      ..get('$base/users', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final userStore = authService.userStore;
+        if (userStore is! AdminUserStore) {
+          return _notImplemented(
+            'UserStore must implement AdminUserStore for admin listing.',
+          );
+        }
+        final limit = _parseLimit(request);
+        final offset = _parseOffset(request);
+        final filter = request.url.queryParameters['filter'];
+        final result = await userStore.listUsers(
+          limit: limit,
+          offset: offset,
+          filter: filter?.trim().isEmpty ?? true ? null : filter,
+        );
+        return _ok(<String, Object?>{
+          'users': result.users.map(_adminUserPayload).toList(growable: false),
+          'total': result.total,
+        });
+      })
+      ..delete('$base/users/<id>', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        await authService.userStore.delete(id);
+        return _ok({'ok': true});
+      })
+      ..get('$base/users/<id>/roles', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final target = await authService.userStore.findById(id);
+        if (target == null) return _badRequest('user not found');
+        return _ok({'roles': target.roles});
+      })
+      ..post('$base/users/<id>/roles', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final body = await _readJson(request);
+        final role = body['role'] as String?;
+        if (role == null || role.trim().isEmpty) {
+          return _badRequest('role is required');
+        }
+        final target = await authService.userStore.findById(id);
+        if (target == null) return _badRequest('user not found');
+        final next = {...target.roles, role}.toList(growable: false);
+        await authService.userStore.update(
+          target.copyWith(roles: next, updatedAt: DateTime.now().toUtc()),
+        );
+        _rolePermissions.putIfAbsent(role, () => <String>{});
+        return _ok({'ok': true});
+      })
+      ..delete(
+        '$base/users/<id>/roles/<role>',
+        (Request request, String id, String role) async {
+          final user = await _requireAuth(request);
+          if (user == null) return _unauthorized();
+          final target = await authService.userStore.findById(id);
+          if (target == null) return _badRequest('user not found');
+          final next = target.roles
+              .where((r) => r != role)
+              .toList(growable: false);
+          await authService.userStore.update(
+            target.copyWith(roles: next, updatedAt: DateTime.now().toUtc()),
+          );
+          return _ok({'ok': true});
+        },
+      )
+      ..get('$base/users/<id>/linked-accounts', (
+        Request request,
+        String id,
+      ) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final target = await authService.userStore.findById(id);
+        if (target == null) return _badRequest('user not found');
+        final linked = target.providers.map((provider) => <String, Object?>{
+          'provider': provider,
+        }).toList(growable: false);
+        return _ok({'linkedAccounts': linked});
+      })
+      ..get('$base/users/<id>/metadata', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        return _ok(_userMetadata[id] ?? <String, Object?>{});
+      })
+      ..put('$base/users/<id>/metadata', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final body = await _readJson(request);
+        _userMetadata[id] = Map<String, Object?>.from(body);
+        return _ok({'ok': true});
+      })
+      ..get('$base/roles', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final roles = _rolePermissions.entries
+            .map(
+              (entry) => <String, Object?>{
+                'name': entry.key,
+                'permissions': entry.value.toList(growable: false),
+              },
+            )
+            .toList(growable: false);
+        return _ok({'roles': roles});
+      })
+      ..post('$base/roles', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final body = await _readJson(request);
+        final name = body['name'] as String?;
+        if (name == null || name.trim().isEmpty) {
+          return _badRequest('name is required');
+        }
+        _rolePermissions[name] = _stringList(body['permissions']).toSet();
+        return _ok({'ok': true});
+      })
+      ..delete('$base/roles/<name>', (Request request, String name) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        _rolePermissions.remove(name);
+        return _ok({'ok': true});
+      })
+      ..get('$base/tenants', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final store = tenantStore;
+        if (store == null) {
+          return _ok({'tenants': <Object?>[]});
+        }
+        final tenants = await store.listAll();
+        return _ok({
+          'tenants': tenants.map((t) => t.toJson()).toList(growable: false),
+        });
+      })
+      ..post('$base/tenants', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final store = tenantStore;
+        if (store == null) return _notImplemented('TenantStore not configured');
+        final body = await _readJson(request);
+        final name = body['name'] as String?;
+        if (name == null || name.trim().isEmpty) {
+          return _badRequest('name is required');
+        }
+        final id = authService.generateRandomToken(byteLength: 8);
+        final saved = await store.save(
+          TenantRecord(
+            id: id,
+            name: name,
+            isActive: body['isActive'] as bool? ?? true,
+            metadata: const <String, Object?>{},
+          ),
+        );
+        return _ok(saved.toJson());
+      })
+      ..delete('$base/tenants/<id>', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final store = tenantStore;
+        if (store == null) return _notImplemented('TenantStore not configured');
+        await store.delete(id);
+        _tenantMembers.remove(id);
+        return _ok({'ok': true});
+      })
+      ..get('$base/tenants/<id>/users', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        return _ok({
+          'userIds': (_tenantMembers[id] ?? <String>{}).toList(growable: false),
+        });
+      })
+      ..post('$base/tenants/<id>/users', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final body = await _readJson(request);
+        final userId = body['userId'] as String?;
+        if (userId == null || userId.trim().isEmpty) {
+          return _badRequest('userId is required');
+        }
+        _tenantMembers.putIfAbsent(id, () => <String>{}).add(userId);
+        return _ok({'ok': true});
+      })
+      ..delete(
+        '$base/tenants/<tenantId>/users/<userId>',
+        (Request request, String tenantId, String userId) async {
+          final user = await _requireAuth(request);
+          if (user == null) return _unauthorized();
+          _tenantMembers[tenantId]?.remove(userId);
+          return _ok({'ok': true});
+        },
+      )
+      ..get('$base/users/<id>/tenants', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final tenantIds = _tenantMembers.entries
+            .where((entry) => entry.value.contains(id))
+            .map((entry) => entry.key)
+            .toList(growable: false);
+        return _ok({'tenantIds': tenantIds});
+      })
+      ..get('$base/sessions', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final sessionStore = authService.sessionStore;
+        if (sessionStore is! AdminSessionStore) {
+          return _notImplemented(
+            'SessionStore must implement AdminSessionStore for admin sessions.',
+          );
+        }
+        final limit = _parseLimit(request);
+        final offset = _parseOffset(request);
+        final filter = request.url.queryParameters['filter'];
+        final result = await sessionStore.listAllSessions(
+          limit: limit,
+          offset: offset,
+          filter: filter?.trim().isEmpty ?? true ? null : filter,
+        );
+        return _ok(<String, Object?>{
+          'sessions': result.sessions
+              .map(
+                (s) => <String, Object?>{
+                  'sessionHandle': s.handle,
+                  'userId': s.userId,
+                  'ipAddress': s.ipAddress,
+                  'userAgent': s.userAgent,
+                  'createdAt': s.createdAt.toIso8601String(),
+                  'lastActiveAt': null,
+                  'expiresAt': s.expiresAt.toIso8601String(),
+                },
+              )
+              .toList(growable: false),
+          'total': result.total,
+        });
+      })
+      ..delete('$base/sessions/<handle>', (Request request, String handle) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final sessionStore = authService.sessionStore;
+        if (sessionStore is AdminSessionStore) {
+          await sessionStore.revokeByHandle(handle);
+        } else {
+          return _notImplemented(
+            'SessionStore must implement AdminSessionStore to revoke by handle.',
+          );
+        }
+        return _ok({'ok': true});
+      })
+      ..get('$base/settings', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        return _ok(Map<String, Object?>.from(_adminSettings));
+      })
+      ..put('$base/settings', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final body = await _readJson(request);
+        _adminSettings.addAll(body);
+        return _ok({'ok': true});
+      })
+      ..patch('$base/settings/ui', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final body = await _readJson(request);
+        final currentUi = Map<String, Object?>.from(
+          _adminSettings['ui'] as Map<String, Object?>? ?? const <String, Object?>{},
+        );
+        currentUi.addAll(body);
+        _adminSettings['ui'] = currentUi;
+        return _ok({'ok': true, 'ui': currentUi});
+      })
+      ..post('$base/2fa-policy', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final body = await _readJson(request);
+        _adminSettings['require2FA'] = body['required'] == true;
+        return _ok({'ok': true, 'updated': 0});
+      })
+      ..get('$base/actions', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        return _ok({'actions': <Object?>[]});
+      })
+      ..get('$base/templates/mail', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final templates = _mailTemplates.entries
+            .map(
+              (entry) => <String, Object?>{
+                'id': entry.key,
+                ...entry.value,
+              },
+            )
+            .toList(growable: false);
+        return _ok({'templates': templates});
+      })
+      ..post('$base/templates/mail', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final body = await _readJson(request);
+        final id = body['id'] as String?;
+        if (id == null || id.trim().isEmpty) {
+          return _badRequest('id is required');
+        }
+        _mailTemplates[id] = <String, Object?>{
+          'baseHtml': body['baseHtml'] as String? ?? '',
+          'baseText': body['baseText'] as String? ?? '',
+          'translations': Map<String, Object?>.from(
+            body['translations'] as Map<dynamic, dynamic>? ??
+                const <dynamic, dynamic>{},
+          ),
+        };
+        return _ok({'ok': true});
+      })
+      ..get('$base/templates/ui', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final list = _uiTranslations.entries
+            .map(
+              (entry) => <String, Object?>{
+                'page': entry.key,
+                'translations': entry.value,
+              },
+            )
+            .toList(growable: false);
+        return _ok({'translations': list});
+      })
+      ..post('$base/templates/ui', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final body = await _readJson(request);
+        final page = body['page'] as String?;
+        if (page == null || page.trim().isEmpty) {
+          return _badRequest('page is required');
+        }
+        final translations = Map<String, String>.from(
+          (body['translations'] as Map<dynamic, dynamic>? ??
+                  const <dynamic, dynamic>{})
+              .map((k, v) => MapEntry(k, '$v')),
+        );
+        _uiTranslations[page] = translations;
+        return _ok({'ok': true});
+      })
+      ..get('$base/api-keys', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final keys = _apiKeys.values
+            .map(
+              (k) => <String, Object?>{
+                'id': k.id,
+                'keyPrefix': k.id.length > 8 ? k.id.substring(0, 8) : k.id,
+                'name': _apiKeyNames[k.id] ?? k.id,
+                'serviceId': k.tenantId,
+                'scopes': k.scopes.toList(growable: false),
+                'isActive': !k.revoked,
+                'expiresAt': null,
+              },
+            )
+            .toList(growable: false);
+        return _ok({'keys': keys, 'total': keys.length});
+      })
+      ..post('$base/api-keys', (Request request) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final body = await _readJson(request);
+        final name = body['name'] as String?;
+        if (name == null || name.trim().isEmpty) {
+          return _badRequest('name is required');
+        }
+        final raw = authService.generateRandomToken(byteLength: 24);
+        final id = authService.generateRandomToken(byteLength: 10);
+        final record = ApiKeyRecord(
+          id: id,
+          keyHash: authService.hashPassword(raw),
+          scopes: Set<String>.from(_stringList(body['scopes'])),
+          ipAllowlist: _stringList(body['allowedIps']),
+          tenantId: body['serviceId'] as String?,
+        );
+        _apiKeys[id] = record;
+        _apiKeyNames[id] = name;
+        final external = apiKeyStore;
+        if (external != null) {
+          await external.save(record);
+        }
+        return _ok({'ok': true, 'id': id, 'rawKey': raw});
+      })
+      ..delete('$base/api-keys/<id>/revoke', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        final record = _apiKeys[id];
+        if (record != null) {
+          _apiKeys[id] = ApiKeyRecord(
+            id: record.id,
+            keyHash: record.keyHash,
+            scopes: record.scopes,
+            ipAllowlist: record.ipAllowlist,
+            tenantId: record.tenantId,
+            revoked: true,
+          );
+        }
+        final external = apiKeyStore;
+        if (external != null) {
+          await external.revoke(id);
+        }
+        return _ok({'ok': true});
+      })
+      ..delete('$base/api-keys/<id>', (Request request, String id) async {
+        final user = await _requireAuth(request);
+        if (user == null) return _unauthorized();
+        _apiKeys.remove(id);
+        final external = apiKeyStore;
+        if (external != null) {
+          await external.revoke(id);
+        }
+        _apiKeyNames.remove(id);
+        return _ok({'ok': true});
+      });
+  }
+
+  // ---------------------------------------------------------------------------
   // Helpers
   // ---------------------------------------------------------------------------
 
@@ -909,6 +1425,50 @@ class AuthRouter {
       (value as List<dynamic>? ?? const <dynamic>[])
           .whereType<String>()
           .toList(growable: false);
+
+  Map<String, Object?> _adminUserPayload(AuthUser user) => <String, Object?>{
+    'id': user.id,
+    'email': user.email,
+    'role': user.roles.isEmpty ? null : user.roles.first,
+    'roles': user.roles,
+    'isEmailVerified': user.emailVerified,
+    'isTotpEnabled': user.totpEnabled,
+    'createdAt': user.createdAt?.toIso8601String(),
+  };
+
+  int _parseLimit(Request request) {
+    final value = int.tryParse(request.url.queryParameters['limit'] ?? '');
+    return (value ?? 20).clamp(1, 100);
+  }
+
+  int _parseOffset(Request request) {
+    final value = int.tryParse(request.url.queryParameters['offset'] ?? '');
+    return max(0, value ?? 0);
+  }
+
+  String _buildAdminUiHtml() {
+    final adminConfig = <String, Object?>{
+      'base': config.adminUiPath,
+      'featSessions': authService.sessionStore is AdminSessionStore,
+      'featRoles': true,
+      'featTenants': tenantStore != null,
+      'featMetadata': true,
+      'feat2faPolicy': false,
+      'featControl': true,
+      'featLinkedAccounts': true,
+      'featApiKeys': true,
+      'featWebhooks': false,
+      'featTemplates': true,
+      'featUpload': false,
+      'uploadBaseUrl': '',
+      'sessionBased': false,
+      'authApiPrefix': config.apiBasePath,
+    };
+    return embeddedAdminUi.replaceFirst(
+      RegExp(r'window\.__ADMIN_CONFIG__ = \{.*?\};', dotAll: true),
+      'window.__ADMIN_CONFIG__ = ${jsonEncode(adminConfig)};',
+    );
+  }
 
   String _sixDigitOtp() {
     final n = Random.secure().nextInt(1000000);
