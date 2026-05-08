@@ -9,8 +9,8 @@ git clone https://github.com/nik2208/awesome-dart-auth
 cd awesome-dart-auth
 dart pub get
 dart run melos bootstrap
-dart run melos run analyze
-dart run melos run test
+dart run melos exec --fail-fast -- dart analyze .
+dart run melos exec --fail-fast --dir-exists=test -- dart test
 ```
 
 ## Project structure
@@ -25,7 +25,7 @@ examples/   Integration examples
 1. **Fork** the repository and create a branch from `main`.
 2. Make your changes following the style guide below.
 3. Add or update tests to cover your change.
-4. Run `dart run melos run analyze` and `dart run melos run test` — all checks must pass.
+4. Run `dart run melos exec --fail-fast -- dart analyze .` and `dart run melos exec --fail-fast --dir-exists=test -- dart test` — all checks must pass.
 5. Open a **Pull Request** against `main`.
 
 ## Style guide

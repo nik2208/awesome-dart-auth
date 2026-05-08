@@ -28,7 +28,7 @@ jobs:
           dart run melos bootstrap
 
       - name: Analyze
-        run: dart run melos run analyze
+        run: dart run melos exec --fail-fast -- dart analyze .
 
       - name: Test
-        run: dart run melos run test
+        run: dart run melos exec --fail-fast --dir-exists=test -- dart test

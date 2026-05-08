@@ -21,7 +21,7 @@ Closes # <!-- issue number, if applicable -->
 
 Describe how you tested these changes:
 
-- [ ] Existing checks pass (`dart run melos run analyze` and `dart run melos run test`)
+- [ ] Existing checks pass (`dart run melos exec --fail-fast -- dart analyze .` and `dart run melos exec --fail-fast --dir-exists=test -- dart test`)
 - [ ] New tests added that cover the change
 - [ ] Manually tested against a real application
 
