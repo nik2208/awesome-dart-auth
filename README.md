@@ -36,7 +36,7 @@ Supports **both authentication strategies** used by those clients:
 | Account linking | ✅ Implemented | Link request/verify plus linked-account listing and unlinking via `AuthCallbacks`. |
 | RBAC | ✅ Implemented | `RolesPermissionsStore` with role-enriched JWT claims. |
 | Multi-tenancy | ✅ Implemented | `TenantStore` contract and `tenantId` propagation through models and tokens. |
-| Admin panel | ➖ Partial | Upstream admin UI assets are now embedded/served (`/auth/admin`, `/auth/admin/assets/admin.js`, `/auth/admin/assets/admin.css`); full admin API parity is still in progress. |
+| Admin panel | ✅ Implemented | Embedded admin UI + admin API routes are available under `/auth/admin` and `/auth/admin/api/*` (store-driven, with optional capabilities enabled based on configured stores). |
 | Built-in UI + auth runtime (`auth.js`) | ✅ Implemented | Upstream login UI + `auth.js` + `base.css` assets are served at `/auth/ui/login`, `/auth/ui/auth.js`, `/auth/ui/base.css` (`/auth/ui` redirects to `/auth/ui/login`). |
 | Client libraries compatibility (Angular + Flutter) | ✅ Implemented | Cookie+CSRF (web) and bearer (native) strategies are both supported. |
 | Event-driven tooling (event bus, SSE, inbound/outbound webhooks, telemetry, notify channels) | ✅ Implemented | `AuthTools`, `AuthEventBus`, `SseDistributor`, webhook signing, outgoing webhook dispatch (`WebhookStore` + `WebhookSender`), and multi-channel `notify()`. |

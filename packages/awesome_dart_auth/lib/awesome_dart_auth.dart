@@ -3,6 +3,8 @@ library;
 export 'src/config/auth_callbacks.dart';
 export 'src/config/auth_config.dart';
 export 'src/contracts/api_key_store.dart';
+export 'src/contracts/admin_session_store.dart';
+export 'src/contracts/admin_user_store.dart';
 export 'src/contracts/mailer_transport.dart';
 export 'src/contracts/pending_link_store.dart';
 export 'src/contracts/roles_permissions_store.dart';

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:math';
 
 import 'package:awesome_dart_auth/awesome_dart_auth.dart';
 import 'package:shelf/shelf.dart';
@@ -8,7 +9,7 @@ import 'package:test/test.dart';
 // In-memory test stores
 // ---------------------------------------------------------------------------
 
-class _UserStore implements UserStore {
+class _UserStore implements AdminUserStore {
   final Map<String, AuthUser> _users = {};
 
   @override
@@ -32,9 +33,29 @@ class _UserStore implements UserStore {
 
   @override
   Future<void> delete(String id) async => _users.remove(id);
+
+  @override
+  Future<UserListResult> listUsers({
+    int limit = 20,
+    int offset = 0,
+    String? filter,
+  }) async {
+    final needle = filter?.toLowerCase();
+    final all = _users.values
+        .where(
+          (u) =>
+              needle == null ||
+              u.email.toLowerCase().contains(needle) ||
+              u.id.toLowerCase().contains(needle),
+        )
+        .toList(growable: false);
+    final start = offset.clamp(0, all.length);
+    final end = min(start + limit, all.length);
+    return (users: all.sublist(start, end), total: all.length);
+  }
 }
 
-class _SessionStore implements SessionStore {
+class _SessionStore implements AdminSessionStore {
   final Map<String, AuthSession> sessions = <String, AuthSession>{};
 
   @override
@@ -51,6 +72,34 @@ class _SessionStore implements SessionStore {
   @override
   Future<void> save(AuthSession session) async {
     sessions[session.id] = session;
+  }
+
+  @override
+  Future<SessionListResult> listAllSessions({
+    int limit = 20,
+    int offset = 0,
+    String? filter,
+  }) async {
+    final needle = filter?.toLowerCase();
+    final all = sessions.values
+        .where(
+          (s) =>
+              needle == null ||
+              s.userId.toLowerCase().contains(needle) ||
+              s.handle.toLowerCase().contains(needle) ||
+              (s.userAgent?.toLowerCase().contains(needle) ?? false),
+        )
+        .toList(growable: false);
+    final start = offset.clamp(0, all.length);
+    final end = min(start + limit, all.length);
+    return (sessions: all.sublist(start, end), total: all.length);
+  }
+
+  @override
+  Future<void> revokeByHandle(String handle) async {
+    final target = sessions.values.where((s) => s.handle == handle).firstOrNull;
+    if (target == null) return;
+    sessions[target.id] = target.copyWith(revoked: true);
   }
 }
 
@@ -418,6 +467,148 @@ void main() {
       expect(adminJsBody, contains('function buildNav()'));
       expect(adminCssResponse.statusCode, 200);
       expect(adminCssBody, contains('.login-card'));
+      expect(adminBody, contains('"featRoles":true'));
+    });
+
+    test('admin API returns users when authenticated', () async {
+      final registerResponse = await router.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/register'),
+          body: jsonEncode({
+            'email': 'admin-users@example.com',
+            'password': 'StrongPass1!',
+          }),
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      final registerBody = _jsonBody(await registerResponse.readAsString());
+      final accessToken = registerBody['accessToken'] as String;
+
+      final response = await router.handler(
+        Request(
+          'GET',
+          Uri.parse('http://localhost/auth/admin/api/users?limit=20&offset=0'),
+          headers: {'authorization': 'Bearer $accessToken'},
+        ),
+      );
+      final body = _jsonBody(await response.readAsString());
+
+      expect(response.statusCode, 200);
+      expect(body['users'], isA<List<dynamic>>());
+      expect(body['total'], greaterThanOrEqualTo(1));
+    });
+
+    test('admin API lists and revokes sessions', () async {
+      final registerResponse = await router.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/register'),
+          body: jsonEncode({
+            'email': 'admin-sessions@example.com',
+            'password': 'StrongPass1!',
+          }),
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      final registerBody = _jsonBody(await registerResponse.readAsString());
+      final accessToken = registerBody['accessToken'] as String;
+
+      final listResponse = await router.handler(
+        Request(
+          'GET',
+          Uri.parse('http://localhost/auth/admin/api/sessions?limit=20&offset=0'),
+          headers: {'authorization': 'Bearer $accessToken'},
+        ),
+      );
+      final listBody = _jsonBody(await listResponse.readAsString());
+      expect(listResponse.statusCode, 200);
+      expect(listBody['sessions'], isA<List<dynamic>>());
+
+      final sessions = (listBody['sessions'] as List<dynamic>);
+      if (sessions.isNotEmpty) {
+        final handle =
+            (sessions.first as Map<String, dynamic>)['sessionHandle'] as String;
+        final revokeResponse = await router.handler(
+          Request(
+            'DELETE',
+            Uri.parse('http://localhost/auth/admin/api/sessions/$handle'),
+            headers: {'authorization': 'Bearer $accessToken'},
+          ),
+        );
+        expect(revokeResponse.statusCode, 200);
+      }
+    });
+
+    test('admin API supports settings and templates', () async {
+      final registerResponse = await router.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/register'),
+          body: jsonEncode({
+            'email': 'admin-settings@example.com',
+            'password': 'StrongPass1!',
+          }),
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+      final registerBody = _jsonBody(await registerResponse.readAsString());
+      final accessToken = registerBody['accessToken'] as String;
+
+      final putSettings = await router.handler(
+        Request(
+          'PUT',
+          Uri.parse('http://localhost/auth/admin/api/settings'),
+          headers: {
+            'authorization': 'Bearer $accessToken',
+            'content-type': 'application/json',
+          },
+          body: jsonEncode({'requireEmailVerification': true}),
+        ),
+      );
+      expect(putSettings.statusCode, 200);
+
+      final getSettings = await router.handler(
+        Request(
+          'GET',
+          Uri.parse('http://localhost/auth/admin/api/settings'),
+          headers: {'authorization': 'Bearer $accessToken'},
+        ),
+      );
+      final settingsBody = _jsonBody(await getSettings.readAsString());
+      expect(getSettings.statusCode, 200);
+      expect(settingsBody['requireEmailVerification'], true);
+
+      final saveTemplate = await router.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/admin/api/templates/mail'),
+          headers: {
+            'authorization': 'Bearer $accessToken',
+            'content-type': 'application/json',
+          },
+          body: jsonEncode({
+            'id': 'welcome',
+            'baseHtml': '<h1>Hello</h1>',
+            'baseText': 'Hello',
+            'translations': {
+              'en': {'subject': 'Hi'},
+            },
+          }),
+        ),
+      );
+      expect(saveTemplate.statusCode, 200);
+
+      final getTemplates = await router.handler(
+        Request(
+          'GET',
+          Uri.parse('http://localhost/auth/admin/api/templates/mail'),
+          headers: {'authorization': 'Bearer $accessToken'},
+        ),
+      );
+      final templatesBody = _jsonBody(await getTemplates.readAsString());
+      expect(getTemplates.statusCode, 200);
+      expect(templatesBody['templates'], isA<List<dynamic>>());
     });
 
     test('hides IdP endpoints when enableIdpMode is false', () async {
