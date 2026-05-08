@@ -376,6 +376,38 @@ void main() {
       expect(body['theme'], 'dark');
     });
 
+    test('hides IdP endpoints when enableIdpMode is false', () async {
+      final noIdpConfig = config.copyWith(enableIdpMode: false);
+      final noIdpRouter = AuthRouter(config: noIdpConfig, authService: service);
+
+      final discoveryResponse = await noIdpRouter.handler(
+        Request('GET', Uri.parse('http://localhost/auth/.well-known/openid-configuration')),
+      );
+      final jwksResponse = await noIdpRouter.handler(
+        Request('GET', Uri.parse('http://localhost/auth/jwks')),
+      );
+      final userInfoResponse = await noIdpRouter.handler(
+        Request(
+          'GET',
+          Uri.parse('http://localhost/auth/userinfo'),
+          headers: const {'authorization': 'Bearer fake-token'},
+        ),
+      );
+      final tokenResponse = await noIdpRouter.handler(
+        Request(
+          'POST',
+          Uri.parse('http://localhost/auth/token'),
+          body: jsonEncode(const {'userId': 'demo'}),
+          headers: const {'content-type': 'application/json'},
+        ),
+      );
+
+      expect(discoveryResponse.statusCode, 404);
+      expect(jwksResponse.statusCode, 404);
+      expect(userInfoResponse.statusCode, 404);
+      expect(tokenResponse.statusCode, 404);
+    });
+
     test('resets password via token store using POST /auth/reset-password', () async {
       final registerResponse = await router.handler(
         Request(
@@ -527,6 +559,22 @@ void main() {
       expect(paths.keys, contains('/auth/logout'));
       expect(paths.keys, contains('/auth/2fa/setup'));
       expect(paths.keys, contains('/auth/magic-link/send'));
+    });
+
+    test('openapi.json omits IdP routes when enableIdpMode is false', () async {
+      final noIdpConfig = config.copyWith(enableIdpMode: false);
+      final noIdpRouter = AuthRouter(config: noIdpConfig, authService: service);
+
+      final response = await noIdpRouter.handler(
+        Request('GET', Uri.parse('http://localhost/auth/openapi.json')),
+      );
+      final body = _jsonBody(await response.readAsString());
+      final paths = body['paths'] as Map<String, dynamic>;
+
+      expect(paths.keys, isNot(contains('/auth/.well-known/openid-configuration')));
+      expect(paths.keys, isNot(contains('/auth/jwks')));
+      expect(paths.keys, isNot(contains('/auth/userinfo')));
+      expect(paths.keys, isNot(contains('/auth/token')));
     });
   });
 }

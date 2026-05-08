@@ -88,8 +88,16 @@ class AuthRouter {
         }
         return _ok(openIdDiscoveryDocument(config));
       })
-      ..get(config.jwksPath, (_) => _ok(jsonWebKeySet()))
+      ..get(config.jwksPath, (_) {
+        if (!config.enableIdpMode) {
+          return Response.notFound('idp mode disabled');
+        }
+        return _ok(jsonWebKeySet());
+      })
       ..get(config.userInfoPath, (Request request) {
+        if (!config.enableIdpMode) {
+          return Response.notFound('idp mode disabled');
+        }
         final token = _extractBearer(request);
         if (token == null) return Response.forbidden('missing bearer token');
         final claims = authService.verifyToken(token);
@@ -103,6 +111,9 @@ class AuthRouter {
         });
       })
       ..post(config.tokenPath, (Request request) async {
+        if (!config.enableIdpMode) {
+          return Response.notFound('idp mode disabled');
+        }
         final payload = await _readJson(request);
         final user = AuthUser(
           id: (payload['userId'] as String?) ?? 'demo-user',

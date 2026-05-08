@@ -127,7 +127,7 @@ final config = AuthConfig(
   cookieSameSite: 'lax',
   cookiePrefix: '__Host-',           // Optional: __Host- or __Secure-
   uiConfig: {'theme': 'dark'},       // Returned by GET /auth/ui/config
-  enableIdpMode: true,               // Expose OIDC discovery + JWKS
+  enableIdpMode: true,               // Expose OIDC discovery, JWKS, userinfo, token
   oauthProviders: {'google', 'github'},
 );
 ```

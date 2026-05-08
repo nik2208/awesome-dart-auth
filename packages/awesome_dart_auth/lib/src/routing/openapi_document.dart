@@ -25,17 +25,19 @@ Map<String, Object?> buildOpenApiDocument(AuthConfig config) => {
       'get': {'summary': 'Return static UI configuration'},
     },
     // ── OIDC / JWKS ───────────────────────────────────────────────────────
-    config.discoveryPath: {
-      'get': {'summary': 'Serve the OIDC discovery document'},
-    },
-    config.jwksPath: {
-      'get': {'summary': 'Serve the JSON Web Key Set'},
-    },
-    config.userInfoPath: {
-      'get': {'summary': 'Return user info based on the bearer token'},
-    },
-    config.tokenPath: {
-      'post': {'summary': 'Issue a demo access + refresh token pair'},
+    if (config.enableIdpMode) ...{
+      config.discoveryPath: {
+        'get': {'summary': 'Serve the OIDC discovery document'},
+      },
+      config.jwksPath: {
+        'get': {'summary': 'Serve the JSON Web Key Set'},
+      },
+      config.userInfoPath: {
+        'get': {'summary': 'Return user info based on the bearer token'},
+      },
+      config.tokenPath: {
+        'post': {'summary': 'Issue a demo access + refresh token pair'},
+      },
     },
     // ── Session ───────────────────────────────────────────────────────────
     '${config.apiBasePath}/register': {
