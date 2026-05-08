@@ -62,7 +62,33 @@ class AuthRouter {
           headers: const {'content-type': 'text/html; charset=utf-8'},
         );
       })
+      ..get('${config.adminUiPath}/assets/admin.js', (_) {
+        if (!config.enableAdminUi) {
+          return Response.notFound('admin ui disabled');
+        }
+        return Response.ok(
+          embeddedAdminJs,
+          headers: const {
+            'content-type': 'application/javascript; charset=utf-8',
+          },
+        );
+      })
+      ..get('${config.adminUiPath}/assets/admin.css', (_) {
+        if (!config.enableAdminUi) {
+          return Response.notFound('admin ui disabled');
+        }
+        return Response.ok(
+          embeddedAdminCss,
+          headers: const {'content-type': 'text/css; charset=utf-8'},
+        );
+      })
       ..get(config.authUiPath, (_) {
+        if (!config.enableAuthUi) {
+          return Response.notFound('auth ui disabled');
+        }
+        return Response.found('${config.authUiPath}/login');
+      })
+      ..get('${config.authUiPath}/login', (_) {
         if (!config.enableAuthUi) {
           return Response.notFound('auth ui disabled');
         }
@@ -80,6 +106,15 @@ class AuthRouter {
           },
         ),
       )
+      ..get('${config.apiBasePath}/ui/base.css', (_) {
+        if (!config.enableAuthUi) {
+          return Response.notFound('auth ui disabled');
+        }
+        return Response.ok(
+          embeddedAuthBaseCss,
+          headers: const {'content-type': 'text/css; charset=utf-8'},
+        );
+      })
       ..get('${config.apiBasePath}/ui/config', (_) => _ok(config.uiConfig))
       ..get(config.openApiPath, (_) => _ok(buildOpenApiDocument(config)))
       ..get(config.discoveryPath, (_) {

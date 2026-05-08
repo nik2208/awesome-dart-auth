@@ -1,8 +1,10 @@
 import 'package:awesome_dart_auth/src/contracts/sse_distributor.dart';
 import 'package:awesome_dart_auth/src/contracts/user_store.dart';
+import 'package:awesome_dart_auth/src/contracts/webhook_store.dart';
 import 'package:awesome_dart_auth/src/events/auth_event.dart';
 import 'package:awesome_dart_auth/src/events/auth_event_bus.dart';
 import 'package:awesome_dart_auth/src/tools/notification_service.dart';
+import 'package:awesome_dart_auth/src/webhooks/webhook_sender.dart';
 
 /// Delivery channel identifiers for [AuthTools.notify].
 class NotifyChannel {
@@ -44,6 +46,10 @@ class AuthTools {
     this.notificationService,
     this.userStore,
     this.eventBus,
+    this.webhookStore,
+    this.webhookVersion = '1',
+    WebhookSender? webhookSender,
+  }) : webhookSender = webhookSender ?? WebhookSender();
   });
 
   /// SSE distributor used by the `sse` channel.
@@ -57,6 +63,15 @@ class AuthTools {
 
   /// Event bus that receives [track] events.
   final AuthEventBus? eventBus;
+
+  /// Webhook store used to resolve outgoing webhook subscribers.
+  final WebhookStore? webhookStore;
+
+  /// Schema version sent in outgoing webhook payloads.
+  final String webhookVersion;
+
+  /// Sender used for webhook deliveries.
+  final WebhookSender webhookSender;
 
   /// Publishes [eventName] with optional [userId] and [payload] on the
   /// configured [eventBus].
@@ -74,6 +89,26 @@ class AuthTools {
       payload: payload,
     );
     await eventBus?.publish(event);
+
+    final store = webhookStore;
+    if (store == null) return;
+
+    final subscribers = await store.findByEvent(eventName, tenantId: tenantId);
+    if (subscribers.isEmpty) return;
+
+    final outgoing = OutgoingWebhookEvent(
+      event: eventName,
+      version: webhookVersion,
+      timestamp: event.occurredAt,
+      data: payload,
+      metadata: <String, Object?>{
+        if (userId != null) 'userId': userId,
+        if (tenantId != null) 'tenantId': tenantId,
+      },
+    );
+    for (final subscriber in subscribers) {
+      await webhookSender.send(subscriber, outgoing);
+    }
   }
 
   /// Sends a push notification to [channel] over one or more [channels].

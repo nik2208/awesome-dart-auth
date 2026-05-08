@@ -32,7 +32,7 @@ void main() {
       context: const {'link': 'https://example.com/verify?token=xyz'},
     );
 
-    expect(reset, contains('password reset'));
-    expect(verify, contains('Verifica'));
+    expect(reset, contains('Click the link below to proceed'));
+    expect(verify, contains('verificare il tuo indirizzo email'));
   });
 }

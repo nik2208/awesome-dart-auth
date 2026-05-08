@@ -110,14 +110,35 @@ void main() {
       );
     });
 
-    test('serves embedded auth UI', () async {
+    test('redirects /auth/ui to upstream login page', () async {
       final response = await router.handler(
         Request('GET', Uri.parse('http://localhost/auth/ui')),
       );
-      final body = await response.readAsString();
+      expect(response.statusCode, 302);
+      expect(response.headers['location'], '/auth/ui/login');
+    });
 
-      expect(response.statusCode, 200);
-      expect(body, contains('awesome-dart-auth'));
+    test('serves upstream login UI + base.css + auth.js assets', () async {
+      final loginResponse = await router.handler(
+        Request('GET', Uri.parse('http://localhost/auth/ui/login')),
+      );
+      final cssResponse = await router.handler(
+        Request('GET', Uri.parse('http://localhost/auth/ui/base.css')),
+      );
+      final jsResponse = await router.handler(
+        Request('GET', Uri.parse('http://localhost/auth/ui/auth.js')),
+      );
+
+      final loginBody = await loginResponse.readAsString();
+      final cssBody = await cssResponse.readAsString();
+      final jsBody = await jsResponse.readAsString();
+
+      expect(loginResponse.statusCode, 200);
+      expect(loginBody, contains('Login - Awesome Node Auth'));
+      expect(cssResponse.statusCode, 200);
+      expect(cssBody, contains('--primary-color'));
+      expect(jsResponse.statusCode, 200);
+      expect(jsBody, contains('window.AwesomeNodeAuth'));
     });
 
     test('issues a token pair from POST /auth/token', () async {
@@ -374,6 +395,29 @@ void main() {
 
       expect(response.statusCode, 200);
       expect(body['theme'], 'dark');
+    });
+
+    test('serves upstream admin UI assets', () async {
+      final adminResponse = await router.handler(
+        Request('GET', Uri.parse('http://localhost/auth/admin')),
+      );
+      final adminJsResponse = await router.handler(
+        Request('GET', Uri.parse('http://localhost/auth/admin/assets/admin.js')),
+      );
+      final adminCssResponse = await router.handler(
+        Request('GET', Uri.parse('http://localhost/auth/admin/assets/admin.css')),
+      );
+
+      final adminBody = await adminResponse.readAsString();
+      final adminJsBody = await adminJsResponse.readAsString();
+      final adminCssBody = await adminCssResponse.readAsString();
+
+      expect(adminResponse.statusCode, 200);
+      expect(adminBody, contains('awesome-node-auth Admin'));
+      expect(adminJsResponse.statusCode, 200);
+      expect(adminJsBody, contains('function buildNav()'));
+      expect(adminCssResponse.statusCode, 200);
+      expect(adminCssBody, contains('.login-card'));
     });
 
     test('hides IdP endpoints when enableIdpMode is false', () async {

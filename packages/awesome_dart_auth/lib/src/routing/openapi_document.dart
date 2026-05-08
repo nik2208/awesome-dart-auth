@@ -15,11 +15,23 @@ Map<String, Object?> buildOpenApiDocument(AuthConfig config) => {
     config.adminUiPath: {
       'get': {'summary': 'Serve the embedded admin UI'},
     },
+    '${config.adminUiPath}/assets/admin.js': {
+      'get': {'summary': 'Serve the embedded admin runtime'},
+    },
+    '${config.adminUiPath}/assets/admin.css': {
+      'get': {'summary': 'Serve the embedded admin stylesheet'},
+    },
     config.authUiPath: {
-      'get': {'summary': 'Serve the embedded auth UI'},
+      'get': {'summary': 'Redirect to the embedded auth login page'},
+    },
+    '${config.authUiPath}/login': {
+      'get': {'summary': 'Serve the embedded auth login UI'},
     },
     config.authJsPath: {
       'get': {'summary': 'Serve the embedded browser SDK'},
+    },
+    '${config.apiBasePath}/ui/base.css': {
+      'get': {'summary': 'Serve the embedded auth stylesheet'},
     },
     '${config.apiBasePath}/ui/config': {
       'get': {'summary': 'Return static UI configuration'},

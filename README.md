@@ -30,16 +30,16 @@ Supports **both authentication strategies** used by those clients:
 | Token management (cookie/bearer, access/refresh rotation, secure cookies) | ✅ Implemented | Cookie + bearer mode, rotation, and optional `cookiePrefix` (`__Host-` / `__Secure-`) via `AuthConfig`. |
 | Identity Provider (IdP) mode (RS256 + JWKS + resource server validation) | ✅ Implemented | OIDC discovery + JWKS endpoint exposed; `enableIdpMode` flag controls availability. |
 | Stateful sessions | ✅ Implemented | Session lifecycle with revocation checks configurable via `AuthConfig.sessionCheckOn` (`allCalls` / `refresh` / `none`). |
-| Dynamic email templates + UI i18n fallback | ✅ Implemented | `TemplateStore` contract + `TemplateRenderer` with built-in `en`/`it` locales and core mail templates (`password_reset`, `magic_link`, `welcome`, `verify_email`, `email_changed`, `invitation`). |
+| Dynamic email templates + UI i18n fallback | ✅ Implemented | `TemplateStore` contract + `TemplateRenderer` with built-in `en`/`it` templates ported from `MailerService` fallback content in `awesome-node-auth` (`password-reset`, `magic-link`, `welcome`, `verify-email`, `email-changed`, `invitation`). |
 | CSRF protection | ✅ Implemented | `csrfMiddleware()` uses cookie + header double-submit validation for browser flows; bearer requests skip validation. |
 | Account management | ✅ Implemented | Register, login, logout, me, profile update, password / email change, verification, and account deletion. |
 | Account linking | ✅ Implemented | Link request/verify plus linked-account listing and unlinking via `AuthCallbacks`. |
 | RBAC | ✅ Implemented | `RolesPermissionsStore` with role-enriched JWT claims. |
 | Multi-tenancy | ✅ Implemented | `TenantStore` contract and `tenantId` propagation through models and tokens. |
-| Admin panel | ➖ Partial | Embedded admin shell is served by `AuthRouter` at `/auth/admin`; full Node admin SPA parity is still in progress. |
-| Built-in UI + auth runtime (`auth.js`) | ✅ Implemented | Embedded auth UI + browser runtime served at `/auth/ui` and `/auth/ui/auth.js` for register/login/logout/me/refresh and password-reset/magic-link flows. |
+| Admin panel | ➖ Partial | Upstream admin UI assets are now embedded/served (`/auth/admin`, `/auth/admin/assets/admin.js`, `/auth/admin/assets/admin.css`); full admin API parity is still in progress. |
+| Built-in UI + auth runtime (`auth.js`) | ✅ Implemented | Upstream login UI + `auth.js` + `base.css` assets are served at `/auth/ui/login`, `/auth/ui/auth.js`, `/auth/ui/base.css` (`/auth/ui` redirects to `/auth/ui/login`). |
 | Client libraries compatibility (Angular + Flutter) | ✅ Implemented | Cookie+CSRF (web) and bearer (native) strategies are both supported. |
-| Event-driven tooling (event bus, SSE, inbound/outbound webhooks, telemetry, notify channels) | ✅ Implemented | `AuthTools`, `AuthEventBus`, `SseDistributor`, webhook signing, telemetry, and multi-channel `notify()`. |
+| Event-driven tooling (event bus, SSE, inbound/outbound webhooks, telemetry, notify channels) | ✅ Implemented | `AuthTools`, `AuthEventBus`, `SseDistributor`, webhook signing, outgoing webhook dispatch (`WebhookStore` + `WebhookSender`), and multi-channel `notify()`. |
 | API keys (M2M) | ✅ Implemented | `ApiKeyStore` contract and `ApiKeyRecord` model available. |
 | OpenAPI / Swagger docs | ✅ Implemented | `buildOpenApiDocument()` generates a full OpenAPI 3.1 spec for all auth routes. |
 | MCP server (`awesome-node-auth-mcp-server`) | ➖ Out of scope | No Dart-side MCP server is bundled; `enableMcpCompatibility` reserves the flag. |
@@ -230,9 +230,13 @@ All endpoints are mounted under `apiBasePath` (default: `/auth`).
 | Method | Path | Description |
 |---|---|---|
 | `GET` | `/ui/config` | UI configuration (theme, branding) |
-| `GET` | `/ui` | Embedded auth UI |
+| `GET` | `/ui` | Redirects to `/ui/login` |
+| `GET` | `/ui/login` | Embedded upstream login UI |
+| `GET` | `/ui/base.css` | Embedded upstream auth stylesheet |
 | `GET` | `/ui/auth.js` | Embedded browser SDK |
 | `GET` | `/admin` | Embedded admin UI |
+| `GET` | `/admin/assets/admin.css` | Embedded admin stylesheet |
+| `GET` | `/admin/assets/admin.js` | Embedded admin runtime |
 | `GET` | `/openapi.json` | OpenAPI 3.1 specification |
 
 ---
