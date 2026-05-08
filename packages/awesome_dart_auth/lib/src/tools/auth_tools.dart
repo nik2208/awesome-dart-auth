@@ -50,7 +50,6 @@ class AuthTools {
     this.webhookVersion = '1',
     WebhookSender? webhookSender,
   }) : webhookSender = webhookSender ?? WebhookSender();
-  });
 
   /// SSE distributor used by the `sse` channel.
   final SseDistributor? sse;
