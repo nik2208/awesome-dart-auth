@@ -73,6 +73,7 @@ class AuthRouter {
       <String, Map<String, String>>{};
   final Map<String, Set<String>> _tenantMembers = <String, Set<String>>{};
   final Map<String, ApiKeyRecord> _apiKeys = <String, ApiKeyRecord>{};
+  final Map<String, String> _apiKeyNames = <String, String>{};
   final Map<String, Object?> _adminSettings = <String, Object?>{
     'requireEmailVerification': false,
     'require2FA': false,
@@ -931,13 +932,12 @@ class AuthRouter {
             'UserStore must implement AdminUserStore for admin listing.',
           );
         }
-        final limit = int.tryParse(request.url.queryParameters['limit'] ?? '') ?? 20;
-        final offset =
-            int.tryParse(request.url.queryParameters['offset'] ?? '') ?? 0;
+        final limit = _parseLimit(request);
+        final offset = _parseOffset(request);
         final filter = request.url.queryParameters['filter'];
         final result = await userStore.listUsers(
-          limit: limit.clamp(1, 100),
-          offset: max(0, offset),
+          limit: limit,
+          offset: offset,
           filter: filter?.trim().isEmpty ?? true ? null : filter,
         );
         return _ok(<String, Object?>{
@@ -1001,7 +1001,6 @@ class AuthRouter {
         if (target == null) return _badRequest('user not found');
         final linked = target.providers.map((provider) => <String, Object?>{
           'provider': provider,
-          'providerAccountId': id,
         }).toList(growable: false);
         return _ok({'linkedAccounts': linked});
       })
@@ -1134,13 +1133,12 @@ class AuthRouter {
             'SessionStore must implement AdminSessionStore for admin sessions.',
           );
         }
-        final limit = int.tryParse(request.url.queryParameters['limit'] ?? '') ?? 20;
-        final offset =
-            int.tryParse(request.url.queryParameters['offset'] ?? '') ?? 0;
+        final limit = _parseLimit(request);
+        final offset = _parseOffset(request);
         final filter = request.url.queryParameters['filter'];
         final result = await sessionStore.listAllSessions(
-          limit: limit.clamp(1, 100),
-          offset: max(0, offset),
+          limit: limit,
+          offset: offset,
           filter: filter?.trim().isEmpty ?? true ? null : filter,
         );
         return _ok(<String, Object?>{
@@ -1152,7 +1150,7 @@ class AuthRouter {
                   'ipAddress': s.ipAddress,
                   'userAgent': s.userAgent,
                   'createdAt': s.createdAt.toIso8601String(),
-                  'lastActiveAt': s.createdAt.toIso8601String(),
+                  'lastActiveAt': null,
                   'expiresAt': s.expiresAt.toIso8601String(),
                 },
               )
@@ -1167,7 +1165,9 @@ class AuthRouter {
         if (sessionStore is AdminSessionStore) {
           await sessionStore.revokeByHandle(handle);
         } else {
-          await sessionStore.revoke(handle);
+          return _notImplemented(
+            'SessionStore must implement AdminSessionStore to revoke by handle.',
+          );
         }
         return _ok({'ok': true});
       })
@@ -1259,7 +1259,8 @@ class AuthRouter {
           return _badRequest('page is required');
         }
         final translations = Map<String, String>.from(
-          (body['translations'] as Map<String, Object?>? ?? const <String, Object?>{})
+          (body['translations'] as Map<dynamic, dynamic>? ??
+                  const <dynamic, dynamic>{})
               .map((k, v) => MapEntry(k, '$v')),
         );
         _uiTranslations[page] = translations;
@@ -1273,7 +1274,7 @@ class AuthRouter {
               (k) => <String, Object?>{
                 'id': k.id,
                 'keyPrefix': k.id.length > 8 ? k.id.substring(0, 8) : k.id,
-                'name': k.id,
+                'name': _apiKeyNames[k.id] ?? k.id,
                 'serviceId': k.tenantId,
                 'scopes': k.scopes.toList(growable: false),
                 'isActive': !k.revoked,
@@ -1295,12 +1296,13 @@ class AuthRouter {
         final id = authService.generateRandomToken(byteLength: 10);
         final record = ApiKeyRecord(
           id: id,
-          keyHash: raw,
+          keyHash: authService.hashPassword(raw),
           scopes: Set<String>.from(_stringList(body['scopes'])),
           ipAllowlist: _stringList(body['allowedIps']),
           tenantId: body['serviceId'] as String?,
         );
         _apiKeys[id] = record;
+        _apiKeyNames[id] = name;
         final external = apiKeyStore;
         if (external != null) {
           await external.save(record);
@@ -1335,6 +1337,7 @@ class AuthRouter {
         if (external != null) {
           await external.revoke(id);
         }
+        _apiKeyNames.remove(id);
         return _ok({'ok': true});
       });
   }
@@ -1427,10 +1430,21 @@ class AuthRouter {
     'id': user.id,
     'email': user.email,
     'role': user.roles.isEmpty ? null : user.roles.first,
+    'roles': user.roles,
     'isEmailVerified': user.emailVerified,
     'isTotpEnabled': user.totpEnabled,
     'createdAt': user.createdAt?.toIso8601String(),
   };
+
+  int _parseLimit(Request request) {
+    final value = int.tryParse(request.url.queryParameters['limit'] ?? '');
+    return (value ?? 20).clamp(1, 100);
+  }
+
+  int _parseOffset(Request request) {
+    final value = int.tryParse(request.url.queryParameters['offset'] ?? '');
+    return max(0, value ?? 0);
+  }
 
   String _buildAdminUiHtml() {
     final adminConfig = <String, Object?>{

@@ -57,6 +57,7 @@ class _UserStore implements AdminUserStore {
 
 class _SessionStore implements AdminSessionStore {
   final Map<String, AuthSession> sessions = <String, AuthSession>{};
+  final Map<String, String> _idByHandle = <String, String>{};
 
   @override
   Future<AuthSession?> findById(String id) async => sessions[id];
@@ -72,6 +73,7 @@ class _SessionStore implements AdminSessionStore {
   @override
   Future<void> save(AuthSession session) async {
     sessions[session.id] = session;
+    _idByHandle[session.handle] = session.id;
   }
 
   @override
@@ -97,7 +99,8 @@ class _SessionStore implements AdminSessionStore {
 
   @override
   Future<void> revokeByHandle(String handle) async {
-    final target = sessions.values.where((s) => s.handle == handle).firstOrNull;
+    final targetId = _idByHandle[handle];
+    final target = targetId == null ? null : sessions[targetId];
     if (target == null) return;
     sessions[target.id] = target.copyWith(revoked: true);
   }
